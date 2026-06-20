@@ -1,0 +1,747 @@
+\documentclass[11pt]{article}
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{caption}
+\usepackage{longtable}
+\usepackage[hidelinks]{hyperref}
+\usepackage{xcolor}
+
+\setlength{\headheight}{14pt}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\scshape\nouppercase{\leftmark}}
+\fancyhead[R]{\small\itshape\nouppercase{\rightmark}}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\title{\textbf{\textit{Stock Market Index Direction Prediction Using\\ Limit Order Book Data}}\\[4pt]
+\large MTech (DSAI) Capstone --- Final Revision}
+\author{Joseph Raj \and Sumanth G.M \and Abhishek Kumar \and Kumara Swamy \and Raghav \and Saagar}
+\date{June 2026}
+
+\begin{document}
+\maketitle
+\thispagestyle{empty}
+
+\begin{abstract}
+\noindent We study short-term \emph{index-direction} prediction from Limit Order Book (LOB) data, combining
+a faithful reproduction of three published deep LOB models (DeepLOB, MLPLOB, TLOB) on the public FI-2010
+benchmark with a first-of-its-kind transfer study on \textbf{NSE index futures (NIFTY / BANKNIFTY)}, for
+which we \emph{engineered our own dataset}. We additionally introduce \textbf{MambaLOB}, a selective
+state-space (SSM) architecture, and characterise its efficiency--accuracy trade-off against the
+transformer baseline. A substantial part of the contribution is \textbf{data engineering}: because no
+clean Indian index-futures LOB dataset existed, we reverse-engineered the Dhan binary depth feed, built a
+cloud collection pipeline (EC2 $\rightarrow$ S3), and produced a continuous front-month series with a
+documented preprocessing pipeline that aligns the NSE data to the FI-2010 contract. This document is the
+final interim revision: it reports the reproduction, the engineered NSE benchmark, the architecture
+comparison, and an efficiency analysis, with honest framing of what does and does not transfer.
+\end{abstract}
+
+\tableofcontents
+\clearpage
+
+% =====================================================================
+\section{Introduction and Literature Survey}
+\markboth{Introduction and Literature Survey}{}
+
+\subsection{Background and Context}
+Financial markets facilitate capital allocation, risk distribution, and continuous price discovery.
+Early forecasting relied on statistical time-series models applied to closing prices. Modern electronic
+exchanges instead operate as continuous double auctions recorded in a \emph{Limit Order Book} (LOB),
+which updates at microsecond granularity and produces millions of structured events per session. For an
+index such as \textbf{NIFTY 50} --- India's premier equity index --- the LOB of the index-\emph{futures}
+contract encapsulates the collective order flow of a broad basket of large-cap stocks, offering a rich
+microstructural signal for short-horizon direction prediction.
+
+\subsection{Motivation and Importance of the Study}
+Research on deep LOB models is concentrated on developed markets (NASDAQ, Nordic exchanges). Indian index
+futures are highly liquid yet structurally distinct (tick discreteness, regime shifts, distinct liquidity
+profiles), and remain almost entirely unstudied with modern LOB architectures. Index direction is hard to
+predict because the series is non-stationary, exhibits stochastic volatility, and is governed by rapidly
+evolving supply--demand dynamics. Crucially, the LOB evolves in \emph{event time}, not clock time: it
+updates whenever a limit order is placed, a market order executes, an order is cancelled, or a level is
+modified. Most prior deep models resample this irregular stream onto a fixed grid (e.g.\ 1-second
+snapshots), which loses intra-interval dynamics, blurs microstructure reactions, and introduces sampling
+bias. This study targets Indian index futures directly in event time, addressing a clear geographic and
+methodological gap.
+
+\subsection{Problem Definition and Scope}
+We predict the direction of the future mid-price over a short horizon from a window of recent LOB states.
+The scope comprises: (i) high-frequency LOB inputs (top-$k$ bid/ask prices and volumes); (ii) construction
+of an event-aligned NSE index-futures dataset; (iii) reproduction of CNN, MLP, and Transformer baselines;
+(iv) a novel selective-SSM architecture (MambaLOB); and (v) multi-horizon, cost-aware evaluation.
+
+\subsection{Research Objectives and Questions}
+\textbf{Objectives.}
+\begin{itemize}[nosep]
+  \item Reproduce DeepLOB and TLOB on FI-2010 and validate against published numbers.
+  \item Engineer a reproducible, event-aligned NSE index-futures LOB dataset (NIFTY, BANKNIFTY).
+  \item Introduce MambaLOB and characterise its accuracy and computational efficiency.
+  \item Compare all architectures on identical data, labels, and protocol; quantify transfer to NSE.
+\end{itemize}
+\textbf{Research Questions.}
+\begin{enumerate}[nosep]
+  \item Do our reproductions match published FI-2010 results within tolerance?
+  \item Is a linear-time selective SSM (Mamba) competitive with a transformer at lower compute?
+  \item Does LOB directional signal transfer from FI-2010 to NSE index futures, and how much does it degrade?
+  \item Which labelling scheme (fixed-threshold vs spread-relative) yields an economically meaningful task?
+\end{enumerate}
+
+\subsection{Expected Contributions}
+\begin{itemize}[nosep]
+  \item \textbf{Engineered NSE benchmark.} A continuous front-month NIFTY/BANKNIFTY index-futures LOB
+        dataset built from the Dhan depth feed --- to our knowledge the first such Indian index-futures LOB
+        dataset prepared for ML, including the full data-engineering pipeline.
+  \item \textbf{Reproduction.} Faithful re-implementations of DeepLOB, MLPLOB and TLOB with results
+        benchmarked against the original papers and against independent reproductions (LOBCAST).
+  \item \textbf{Novel architecture.} MambaLOB, a selective state-space model for LOB, with a rigorous
+        efficiency comparison (linear vs quadratic scaling in sequence length).
+  \item \textbf{Transfer study.} A standardized comparison of four architectures on the NSE benchmark, with
+        honest reporting of degradation relative to FI-2010.
+\end{itemize}
+
+\subsection{Review Methodology and Source Selection Criteria}
+The survey covers classical statistical approaches (ARIMA), Hidden Markov Models, deep LOB models
+(CNN, LSTM, CNN--LSTM hybrids), the transformer-based TLOB/MLPLOB family, state-space models for sequences
+(S4/S5/Mamba), and continuous-time microstructure models. Selection criteria: use of high-frequency LOB
+data, explicit modelling of LOB structure, empirical validation, and architectural novelty. Primary
+references include the DeepLOB family, the TLOB paper, FI-2010 (Ntakaris et al.), the LOBCAST benchmark
+study (Prata et al.), the Mamba paper (Gu \& Dao), and continuous-time LOB modelling work.
+
+\subsection{Survey of Existing Approaches}
+\subsubsection{Early Solutions and Classical Techniques}
+Parametric statistical models (AR, MA, ARMA, ARIMA) assume specific data-generating processes and perform
+adequately on linear dynamics but fail under the non-linear, non-stationary behaviour of LOB data. Enhanced
+and hybrid HMM/ARIMA models improve regime modelling but depend on historical price series, do not use LOB
+depth, and are sensitive to regime misclassification.
+
+\subsubsection{Modern Approaches and Evolving Trends}
+\textbf{DeepLOB} (Zhang et al., 2019) combines convolutional feature extraction across LOB levels with an
+LSTM over time, substantially improving mid-price movement prediction on FI-2010. It established the
+40-feature $\times$ window representation that we adopt. It nonetheless operates on event-resolution
+snapshots without attention.
+
+\subsubsection{Emerging Models and Hybrid Frameworks}
+\textbf{MLPLOB} and \textbf{TLOB} (Berti \& Kasneci, 2025) reframe the model as alternating normalization and
+mixing blocks; TLOB uses \emph{dual} (temporal and feature) self-attention and is the current
+state-of-the-art on FI-2010. \textbf{State-space models} (S4, S5, Mamba) offer linear-time sequence
+modelling and have entered LOB research on the generative side; their use as a classification backbone for
+LOB direction is the novelty window this project targets.
+
+\subsection{Comparative Evaluation of Techniques}
+\begin{table}[h]
+\centering
+\caption{Comparison of LOB modelling approaches considered in this work.}
+\begin{tabular}{@{}llll@{}}
+\toprule
+\textbf{Approach} & \textbf{Strength} & \textbf{Limitation} & \textbf{Role here} \\
+\midrule
+ARIMA & Linear forecasting & No non-linear/LOB structure & Conceptual baseline \\
+HMM & Regime modelling & No microstructure depth & Conceptual baseline \\
+DeepLOB (CNN--LSTM) & Depth + temporal & Sequential bottleneck & Reproduced baseline \\
+MLPLOB & Lightweight & No sequence model & Ablation floor \\
+TLOB (Transformer) & SOTA accuracy & $O(L^2)$ attention cost & Reproduced SOTA baseline \\
+MambaLOB (SSM) & $O(L)$, tiny params & Lower accuracy on FI-2010 & \textbf{Proposed model} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Dataset and Benchmark Overview}
+\textbf{FI-2010} (public benchmark): 5 Finnish stocks, 10 trading days, 10-level LOB, pre-normalized
+(z-score variant), with standard anchored cross-folds. Used for reproduction.
+\textbf{NSE index-futures dataset (engineered here):} NIFTY and BANKNIFTY near-month futures, 20-level depth
+captured live via the Dhan API and stored as Parquet on S3; the first ten levels yield a 40-feature vector
+identical in layout to FI-2010. Period: 12 May -- 12 June 2026 (21 valid trading days across the May
+$\rightarrow$ June expiry roll); $\approx$57k events/instrument/day.
+
+\subsection{Tools, Frameworks, and Experimental Protocols}
+Python 3.x; PyTorch ($\geq$2.x) with the CUDA \texttt{mamba-ssm} kernel; scikit-learn (metrics, baselines);
+NumPy/Pandas (LOB processing); AWS EC2 + S3 (collection/storage); Google Colab and Kaggle (GPU training);
+Matplotlib/Seaborn (figures). Protocol: chronological train/val/test splits; per-feature z-score from
+training statistics only; sliding windows of length $L=100$; percentage-mid-change labelling.
+
+\subsection{Evaluation Metrics Used in Literature}
+\begin{table}[h]
+\centering
+\caption{Evaluation metrics for LOB direction prediction.}
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Metric} & \textbf{Definition} & \textbf{Why it matters} \\
+\midrule
+Weighted F1 & class-frequency-weighted $F_1$ & matches headline numbers in original papers \\
+Macro F1 & unweighted mean $F_1$ & fair under class imbalance; matches independent repro \\
+Accuracy & correct/total & supplementary; misleading under imbalance \\
+MCC & Matthews correlation & balanced single-number summary \\
+Hit-rate / net bps & directional accuracy / cost-adj.\ return & signal-quality / economic relevance \\
+\bottomrule
+\end{tabular}
+\end{table}
+We report both weighted and macro $F_1$ throughout, because (as Section~3.6 shows) the original FI-2010
+headline numbers are weighted while independent reproductions report macro.
+
+\subsection{Limitations of Prior Work}
+No emerging-market (Indian) application; limited event-driven deep architectures; little use of
+linear-time state-space models for LOB classification; limited reporting of efficiency/scaling; and
+inconsistent metric conventions across papers.
+
+\subsection{Research Gaps and Open Questions}
+Can LOB-based models generalise to Indian index futures? Can a linear-time SSM match a transformer at
+lower compute? How should labels be defined so that the task is economically meaningful (rather than
+trivially dominated by ``no move'')? These motivate our design.
+
+\subsection{Innovation and Conceptual Synthesis}
+This work synthesises classical benchmarking, CNN spatial extraction (DeepLOB), transformer dual-attention
+(TLOB), and linear-time state-space modelling (Mamba) on a newly engineered Indian benchmark, under one
+standardized protocol.
+
+\subsection{Visualizations and Knowledge Summaries}
+The report includes comparative tables, architecture descriptions, a data-pipeline schematic, F1-by-horizon
+charts, confusion matrices, and the memory/latency-vs-sequence-length scaling curve.
+
+\subsection{Academic Integrity and Citation Style}
+Empirical findings are attributed to their source works; conceptual explanations are original synthesis.
+Generative-AI assistance (Section~3.11.1) was used for drafting and is disclosed.
+
+\subsection{Summary of the Chapter}
+We reviewed classical, deep, transformer, and state-space approaches, identified the Indian-market and
+efficiency gaps, and positioned our contribution: an engineered NSE LOB benchmark, a reproduction of three
+baselines, and a novel Mamba-based model evaluated on identical footing.
+
+\subsection{Structure of the Report}
+Chapter~1 (this chapter) introduces the problem and surveys the literature. Chapter~2 establishes the
+theoretical and architectural foundations. Chapter~3 is the interim report: the engineered dataset, the
+data-engineering pipeline, preprocessing, baseline development, preliminary results, efficiency analysis,
+reproducibility, risks, and next steps.
+
+% =====================================================================
+\section{Foundations}
+\markboth{Foundations}{}
+
+\subsection{Introduction to the Foundations Chapter}
+This chapter establishes the theoretical underpinnings (market microstructure, the limits of market
+efficiency), the conceptual data-to-model pipeline, the four model architectures (three reproduced
+baselines and the proposed MambaLOB), and the notation used throughout.
+
+\subsection{Theoretical Underpinnings}
+\subsubsection{Market Microstructure}
+The continuous double auction maintains a LOB recording all outstanding limit orders at each price level.
+The \emph{bid} side (buy orders, descending) has best bid $P_1^b$; the \emph{ask} side (sell orders,
+ascending) has best ask $P_1^a$. The mid-price is the primary, less noisy, forecasting target:
+\begin{equation}
+p_{\mathrm{mid}}(t) = \frac{P_1^a(t) + P_1^b(t)}{2}.
+\end{equation}
+The bid--ask spread $S(t) = P_1^a(t) - P_1^b(t)$ measures liquidity (and, importantly for us, transaction
+cost), while per-level depth encodes short-term price pressure.
+
+\subsubsection{The Efficient Market Hypothesis and Its Limits}
+The semi-strong EMH implies no excess return from public information, yet high-frequency studies document
+short-lived predictability from order-flow imbalance, inventory effects, and latency arbitrage at
+sub-second to minute horizons. Deep models trained on LOB snapshots exploit precisely these transient
+inefficiencies; their documented (if small) predictive power motivates this study, while the EMH frames
+our expectation that signal is weak and easily overwhelmed by costs.
+
+\subsection{Conceptual Framework}
+The pipeline is: \emph{collect} (FI-2010 download; live Dhan capture for NSE) $\rightarrow$ \emph{preprocess}
+(clean, reorder to a 40-feature LOB vector, z-score on train statistics, label, window) $\rightarrow$
+\emph{model} (DeepLOB, MLPLOB, TLOB baselines; MambaLOB proposed) $\rightarrow$ \emph{evaluate}
+(multi-horizon classification metrics, efficiency, cost-aware backtest). Every model consumes the same
+tensor $X \in \mathbb{R}^{B \times L \times F}$ ($L=100$, $F=40$) and emits logits over three classes.
+
+\subsubsection{Feature Representation}
+Each LOB state is the first ten levels as
+$[\,P^a_i, V^a_i, P^b_i, V^b_i\,]_{i=1}^{10}$ (40 features), the FI-2010 convention. Mid-price and spread
+are derived from level~1 for labelling and cost accounting.
+
+\subsubsection{Baseline Models}
+\textbf{DeepLOB} (CNN + Inception + LSTM); \textbf{MLPLOB} (flatten + MLP + Bilinear Normalization, the
+ablation floor); \textbf{TLOB} (dual temporal/feature self-attention, SOTA). All are reproduced faithfully.
+
+\subsubsection{Proposed MambaLOB Model}
+MambaLOB projects the 40-feature input to $d_{\mathrm{model}}$, applies a stack of selective state-space
+(Mamba) blocks for $O(L)$ temporal mixing, optionally a feature-axis attention, then Bilinear Normalization
+and a linear classifier:
+\[
+X \xrightarrow{\text{Linear}} \text{Mamba}\times n \xrightarrow{(\text{opt.\ feature attn})}
+\text{BiN} \xrightarrow{\text{FC}} \text{logits}\in\mathbb{R}^{3}.
+\]
+On GPU it uses the CUDA \texttt{mamba-ssm} kernel; a pure-PyTorch fallback exists for CPU/debug.
+
+\subsubsection{Training and Evaluation}
+Supervised three-class classification; class-weighted cross-entropy; AdamW with cosine decay; early
+stopping on validation macro/weighted-$F_1$; metrics as in Table~2.
+
+\subsection{Terminology and Notational Conventions}
+\begin{table}[h]
+\centering
+\caption{Notation.}
+\begin{tabular}{@{}ll@{}}
+\toprule
+Symbol & Meaning \\
+\midrule
+$X \in \mathbb{R}^{B\times L\times F}$ & input window batch ($L=100$, $F=40$) \\
+$L, F, B$ & sequence length, features, batch size \\
+$d_{\mathrm{model}}, d_{\mathrm{state}}, d_{\mathrm{conv}}$ & Mamba projection / state / conv width \\
+$k$ (or $H$) & prediction horizon in LOB events \\
+$p_{\mathrm{mid}}, S$ & mid-price, bid--ask spread \\
+$\theta, \alpha$ & label thresholds (spread-relative / fixed) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{Class Labels}
+We use the encoding $\{0=\text{Down},\,1=\text{Stationary},\,2=\text{Up}\}$. Labels are assigned by the
+smoothed-mid percentage change over the horizon (Section~2.6).
+
+\subsection{Algorithmic Foundations}
+\subsubsection{Data Preprocessing Algorithms}
+\textbf{Z-score normalization} per feature, using \emph{training} statistics only:
+$Z = (X-\mu)/\sigma$.
+\textbf{Sliding-window} segmentation produces $X\in\mathbb{R}^{L\times F}$ with $L=100$.
+\textbf{Labelling}: with $m^-(t)$ and $m^+(t)$ the mean mid over the $k$ events behind/ahead,
+$r(t) = (m^+ - m^-)/m^-$; then Up if $r>\tau$, Down if $r<-\tau$, else Stationary, where $\tau$ is the
+threshold (Scheme A: fixed $\alpha$; Scheme B: spread-relative $\theta$).
+
+\subsubsection{DeepLOB / MLPLOB / TLOB}
+DeepLOB stacks $1\times2$ convolutions (fuse price/volume, then sides), a $1\times10$ convolution (fuse
+levels), an Inception module, and an LSTM. MLPLOB flattens and applies MLP blocks with Bilinear
+Normalization. TLOB alternates temporal and feature self-attention with a progressive MLP head.
+
+\subsubsection{Bilinear Normalization and Attention}
+Bilinear Normalization (BiN) normalises across both the temporal and feature axes and learns to weight the
+two, stabilising LOB training. Multi-head self-attention provides cross-position mixing in TLOB; its cost
+is quadratic in $L$.
+
+\subsubsection{Selective State-Space Modelling}
+A Mamba block realises a discretised, input-dependent linear recurrence
+$h_t = \bar{A}_t h_{t-1} + \bar{B}_t x_t,\ y_t = C_t h_t$, where the selection mechanism makes
+$\bar A,\bar B,C$ depend on the input. This yields $O(L)$ time and memory and a parameter count independent
+of $L$ --- the basis of our efficiency claim.
+
+\subsection{Classification Algorithm}
+The head produces $\hat{y} = \mathrm{Softmax}(Wx+b)$ over the three classes. Optimization uses
+class-weighted cross-entropy and AdamW; evaluation uses weighted/macro $F_1$, accuracy, and MCC.
+
+\subsection{Model Design Principles}
+Modularity (separate ingest / dataset / model / train / eval modules), reusability (shared loaders,
+normalization, windowing across FI-2010 and NSE), adaptability (one data contract for all models), and
+scalability (lazy windowing keeps memory $O(T\cdot F)$ rather than materialising all windows).
+
+\subsection{Domain-specific Constraints and Assumptions}
+Tick discreteness (NIFTY futures move in $\geq$0.05 increments) quantizes mid-price changes and informs
+threshold choice; the bid--ask spread sets a hard floor on tradeable signal; pre-open and the
+opening/closing auction windows are excluded to isolate continuous trading; expiry days require contract
+rolling.
+
+\subsection{Ethical, Legal, and Societal Implications}
+The work uses public benchmark data and self-collected public market data (no personal data). Predictions
+are framed as \emph{signal-quality} research, not trading advice; the cost-aware analysis (Section~3.10)
+explicitly guards against over-claiming profitability.
+
+\subsection{Summary of the Chapter}
+We established microstructure foundations, the shared data-to-model pipeline, the four architectures, and
+the notation. The next chapter reports the engineered dataset and the empirical results.
+
+% =====================================================================
+\section{Interim Report}
+\markboth{Interim Report}{}
+
+\subsection{Chapter Overview}
+This chapter documents the work completed to date: (i) the \textbf{data-engineering} effort to build an NSE
+index-futures LOB dataset; (ii) the preprocessing pipeline aligning it to FI-2010; (iii) reproduction of
+the three baselines and the proposed MambaLOB; (iv) preliminary results on FI-2010 and the NSE transfer;
+(v) an efficiency analysis; and (vi) reproducibility, risks, and next steps. Experiments that are still
+running or deferred are marked accordingly.
+
+\subsection{Dataset Acquisition and Preprocessing}
+
+\subsubsection{Dataset Description}
+\textbf{FI-2010 (reproduction).} The public NoAuction z-score variant: 5 stocks, 10 days, 10 levels,
+pre-normalized, with standard cross-folds (we use CF\_7: 7 train + 3 test days).
+
+\textbf{NSE index futures (engineered).} We built a live dataset for NIFTY and BANKNIFTY near-month futures
+using the Dhan twenty-level depth feed, stored as daily Parquet on Amazon S3. Key facts: 21 valid trading
+days (12 May -- 12 June 2026), spanning the May$\rightarrow$June expiry roll; $\approx$57{,}000
+events/instrument/day ($\approx$1.1M combined per instrument, exceeding FI-2010's $\approx$400k scale); the
+first 10 of 20 levels give a 40-feature vector identical in layout to FI-2010, so models transfer with no
+architectural change.
+
+\subsubsection{Data Quality Checks}
+We evaluated two Indian data sources before committing. Table~\ref{tab:dhanvskite} summarises the
+comparison that led us to choose Dhan.
+\begin{table}[h]
+\centering
+\caption{Dhan vs Kite vs FI-2010 (15-min simultaneous capture).}
+\label{tab:dhanvskite}
+\begin{tabular}{@{}llll@{}}
+\toprule
+Property & Dhan (20-depth) & Kite Connect & FI-2010 \\
+\midrule
+LOB levels & 20 & 5 & 10 \\
+Features (10-level) & 40 (direct match) & 20 (needs change) & 40 \\
+Update mechanism & event-driven (gap CV 3.3) & periodic $\sim$1s (CV 1.3) & event-driven \\
+Median inter-tick gap & 0.20 s & 1.0 s & $<$0.1 s \\
+L1--L10 completeness & 100\% & n/a & 100\% \\
+Order-count field & yes & no & no \\
+Cost & low & higher & free \\
+\bottomrule
+\end{tabular}
+\end{table}
+Dhan wins on depth, event-driven granularity (structurally consistent with FI-2010), completeness, and
+cost. Beyond source selection, per-day cleaning drops: rows with crossed quotes ($P^b_1\!\ge\!P^a_1$);
+rows with any missing level-1--10 field; and tick-level glitches (mid-price jumps $>$0.5\% relative to the
+previous valid mid). Empty/partial collection days (the broken expiry-roll files of 27--29 May) are
+excluded; the partial 11 May session is dropped.
+
+\subsubsection{Exploratory Data Analysis (EDA)}
+Active instruments reach $\approx$200--250 events/min in single-instrument capture; the heavy-tailed
+inter-tick gap distribution (coefficient of variation $\approx$3.3) confirms genuine \emph{event-driven}
+updates rather than periodic polling. Median spreads are a few basis points (NIFTY $\approx$2.5 bps),
+which --- as Section~3.6 shows --- has direct consequences for labelling. Class balance varies sharply with
+horizon and labelling scheme (Tables in Section~3.6).
+
+\subsubsection{Pre-processing Pipelines}
+The pipeline that aligns Dhan to the FI-2010 contract (implemented in \texttt{modeling/nse\_dataset.py}):
+\begin{enumerate}[nosep]
+  \item \textbf{Front-month stitching}: match each daily file by root (NIFTY/BANKNIFTY), concatenating the
+        May and June contracts into one continuous front-month series.
+  \item \textbf{Feature reorder}: map Dhan's column ranges to the interleaved FI-2010 layout
+        $[P^a_i,V^a_i,P^b_i,V^b_i]\times 10$.
+  \item \textbf{Cleaning}: crossed-quote, missing-level, and tick-spike filters (above).
+  \item \textbf{Per-day segmentation}: labels and windows are computed \emph{within} a trading day, so the
+        overnight gap and the expiry roll are segment boundaries --- no spurious cross-day returns and no
+        window straddles two contracts.
+  \item \textbf{Z-score} using training statistics only.
+  \item \textbf{Labelling} (Scheme A fixed-$\alpha$ or Scheme B spread-relative).
+  \item \textbf{Lazy sliding windows}: the $(T,F)$ matrix is stored once and windows are sliced on demand,
+        keeping memory $O(T\cdot F)$; the eager $(N,L,F)$ expansion would exhaust memory on the
+        full series.
+\end{enumerate}
+Default split (chronological): train 12 May -- 4 June (15 days), validation = last 10\% of training
+windows, test 5/8/9/10/11/12 June (6 most-recent out-of-sample days).
+
+\subsection{Feature Engineering}
+\subsubsection{Feature Identification Techniques}
+The base model input is the raw 40-dimensional LOB vector (10 levels) per event. On top of this we engineer
+\emph{microstructure} channels (\texttt{modeling/features.py}), motivated by the weak raw-LOB signal on NSE:
+\begin{itemize}[nosep]
+  \item \textbf{Order-Flow Imbalance (OFI)} (Cont et al.) at level 1 and summed over levels 1--5, computed
+        per trading day so flow never crosses an overnight/expiry boundary;
+  \item \textbf{depth imbalance} (level 1 and aggregate over 10 levels), \textbf{micro-price}
+        (Stoikov, volume-weighted mid), and \textbf{relative spread};
+  \item \textbf{per-level order counts} --- a channel \emph{unique to the Dhan feed}, absent from FI-2010 and Kite.
+\end{itemize}
+These define named feature sets used for ablation: \texttt{base40} (raw, 40), \texttt{micro} (+6 scalars, 46),
+\texttt{orders60} (+order counts, 60), \texttt{depth80} (20 levels, 80), and \texttt{all} (66).
+
+\subsubsection{Dimensionality Reduction}
+None applied; the input is intentionally the raw/engineered LOB tensor. We instead study which
+\emph{representation} the signal needs via the depth choice and the feature-set ablation below.
+
+\subsubsection{Feature Impact Observations}
+Table~\ref{tab:featabl} shows the ablation for the proposed MambaLOB on NIFTY (improvement in test
+weighted-$F_1$ over \texttt{base40}).
+\begin{table}[h]
+\centering
+\caption{Feature ablation --- MambaLOB (NIFTY), $\Delta$ weighted-$F_1$ vs \texttt{base40}.}
+\label{tab:featabl}
+\begin{tabular}{@{}lccl@{}}
+\toprule
+Feature set & $\Delta$ (k=10) & $\Delta$ (k=100) & Verdict \\
+\midrule
+\texttt{micro}    & $+0.028$ & $+0.040$ & helps \\
+\texttt{orders60} & $-0.069$ & $-0.007$ & hurts alone \\
+\texttt{depth80}  & $-0.003$ & $+0.002$ & $\approx$ neutral \\
+\textbf{\texttt{all}} & $\mathbf{+0.024}$ & $\mathbf{+0.068}$ & \textbf{best} \\
+\bottomrule
+\end{tabular}
+\end{table}
+Findings: (i) \textbf{microstructure features help} --- \texttt{micro} and \texttt{all} beat raw LOB, with the
+gain growing with horizon (at k=100 the \texttt{all} set lifts weighted-$F_1$ from 0.569 to 0.637); the effect
+also holds for TLOB ($+0.007$). (ii) \textbf{Raw order counts help only in combination} with the micro scalars
+(\texttt{orders60} alone hurts, but \texttt{all} is best) --- a feature-interaction result that exploits the
+Dhan-unique channel. (iii) \textbf{Book depth beyond level 10 is uninformative} (\texttt{depth80} neutral) ---
+the NSE index-futures signal lives at the top of book. (iv) The features add negligible parameters
+($68$k\,$\rightarrow$\,$70$k), so MambaLOB stays the efficient model. The separate labelling-threshold study
+(Section~3.6) remains the key \emph{economic} finding. \emph{(Single seed, NIFTY; multi-seed CIs are deferred
+to confirm significance.)}
+
+\subsection{Technical Implementation}
+\subsubsection{Tools and Technology Stack}
+Python; PyTorch with \texttt{mamba-ssm}/\texttt{causal-conv1d} (CUDA); scikit-learn; NumPy/Pandas; Dhan and
+Kite WebSocket APIs; AWS EC2 (collection) and S3 (storage, region \texttt{ap-south-2}); Google Colab and
+Kaggle (GPU training); \texttt{boto3}/\texttt{s3fs}; Matplotlib/Seaborn; Git/GitHub for version control.
+
+\subsubsection{System Setup and Environment Configuration (Data Engineering)}
+Because no clean Indian index-futures LOB dataset existed, the dataset was \emph{engineered end to end}:
+\begin{itemize}[nosep]
+  \item \textbf{Reverse-engineering the Dhan binary feed}: the depth WebSocket emits an undocumented binary
+        packet. We decoded its structure offline --- a 1992-byte full format (40-byte header; 20$\times$16-byte
+        bid then ask records of order-count/price(f64)/qty) and a 664-byte compact format of two 332-byte
+        sub-packets --- fixing byte-offset bugs (bid price at $+4$, not $+0$) and rejecting denormalized
+        near-zero floats from empty levels.
+  \item \textbf{Collection pipeline}: an EC2 (Ubuntu) collector streams 20-level depth during market hours
+        (09:15--15:30 IST), writes daily zstd Parquet, and a cron job syncs to S3 after close.
+  \item \textbf{Production debugging}: corrected the futures segment code (\texttt{NSE\_FNO}); diagnosed a
+        mislabelled-instrument bug caused by a broker token reassignment after a 1:1 bonus issue; handled
+        graceful WebSocket close at market end.
+  \item \textbf{Contract roll}: the May contract expired and collection rolled to the June contract; the
+        loader stitches them into a continuous front-month series with the roll as a segment boundary.
+  \item \textbf{Training environments}: FI-2010 reproduction and Mamba/NSE training run on Colab/Kaggle
+        GPUs; secrets (GitHub PAT, AWS keys, Dhan/Kite tokens) are read host-agnostically; every experiment
+        uploads its results and checkpoints to S3 as it completes (timeout-safe, resumable across sessions).
+\end{itemize}
+
+\subsubsection{Modular Code-base Description}
+The repository (\texttt{nse-lob-capstone}) is organised as: \texttt{data\_acquisition/} (Dhan/Kite
+collectors, token refresh, S3 sync, EC2 ops); \texttt{modeling/} (\texttt{fi2010\_dataset.py},
+\texttt{nse\_dataset.py}, \texttt{models.py} [DeepLOB/MLPLOB/MambaLOB], \texttt{tlob.py},
+\texttt{train.py}, \texttt{backtest.py}, \texttt{stats.py}, \texttt{nbenv.py}); \texttt{notebooks/}
+(reproduction, TLOB, Mamba+efficiency, NSE matrix, NSE extras); \texttt{literature/}; and \texttt{docs/}.
+All models consume one data contract, so a single loader/trainer serves both datasets.
+
+\subsection{Baseline Model Development}
+\subsubsection{Baseline Algorithm Description}
+DeepLOB (CNN--Inception--LSTM), MLPLOB (MLP+BiN), and TLOB (dual-attention transformer) are implemented to
+the shared $(B,100,40)\rightarrow[B,3]$ contract; TLOB is vendored faithfully from the official
+implementation.
+
+\subsubsection{Training Setup and Parameters}
+Max 50 epochs (FI-2010) / 20 epochs (NSE), early stopping on validation $F_1$; AdamW; class-weighted
+cross-entropy; batch 128; per-model learning rates following the papers (DeepLOB/MLPLOB $10^{-3}$, TLOB
+$10^{-4}$, MambaLOB $3\times10^{-4}$).
+
+\subsubsection{Early Performance Metrics --- FI-2010 reproduction}
+\begin{table}[h]
+\centering
+\caption{FI-2010 (CF\_7, $L=100$) --- weighted / macro $F_1$ (\%).}
+\label{tab:fi2010}
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+Model & $k{=}10$ & $k{=}20$ & $k{=}50$ & $k{=}100$ & Notes \\
+\midrule
+DeepLOB & 82.5 / 71.9 & --- & --- & --- & $\approx$ paper 83.4 (weighted) \\
+TLOB    & 88.0 / 81.1 & 77.3 / 70.2 & 88.4 / 87.5 & 92.5 / 92.5 & SOTA-range; paper $\sim$92.8 @ seq 128 \\
+MambaLOB (M1) & 79.2 / 67.4 & 71.1 / 61.4 & 72.8 / 70.0 & 69.3 / 68.7 & lower accuracy, far cheaper \\
+\bottomrule
+\end{tabular}
+\end{table}
+\textbf{Acceptance.} DeepLOB's weighted $F_1$ (82.5\%) matches the paper's headline ($\sim$83.4\%); TLOB is
+in the SOTA range, reaching 92.5\% at $k{=}100$ (the paper's $\sim$92.8 was obtained at sequence length
+128; we use 100). These confirm the reproduction is correct.
+
+\subsubsection{Output Visualization and Interpretation}
+We report confusion matrices per (model, horizon), $F_1$-by-horizon line charts, and the efficiency
+scaling curve (Section~3.10). At longer horizons macro and weighted $F_1$ converge as the Stationary class
+shrinks.
+
+\subsection{Preliminary Analysis and Observations}
+\subsubsection{Result Analysis and Discussion}
+\textbf{FI-2010.} On accuracy, TLOB $>$ DeepLOB $>$ MambaLOB. \textbf{NSE transfer (Scheme A, complete ---
+32 runs over 4 models $\times$ 2 symbols $\times$ 4 horizons).} Table~\ref{tab:nse} summarises weighted
+$F_1$. All models beat the naive baselines (random $\approx$0.33; lift over the best baseline is positive
+everywhere), so there \emph{is} learnable signal on NSE --- but the absolute numbers are well below FI-2010,
+the expected degradation on new data (consistent with the LOBCAST benchmark study).
+\begin{table}[h]
+\centering
+\caption{NSE Scheme A --- test weighted $F_1$ (range over $k\in\{10,20,50,100\}$). Lift = weighted $F_1$
+minus the best naive baseline.}
+\label{tab:nse}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Model & NIFTY (wF1) & BANKNIFTY (wF1) & Lift over baseline \\
+\midrule
+DeepLOB  & 0.44--0.52 & 0.46--0.50 & 0.03--0.12 \\
+MLPLOB   & 0.46--0.64 & 0.35--0.47 & 0.01--0.19 \\
+MambaLOB & 0.52--0.59 & 0.45--0.48 & 0.02--0.17 \\
+\textbf{TLOB} & \textbf{0.60--0.71} & \textbf{0.64--0.72} & \textbf{0.25--0.30} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{TLOB leads across both instruments and all horizons} (lift $\approx$0.25--0.30), mirroring its
+FI-2010 ranking. \textbf{Key transfer finding for the proposed model:} on NIFTY, \emph{MambaLOB (68k
+parameters) outperforms DeepLOB (191k) and matches MLPLOB, second only to TLOB} --- whereas on FI-2010
+MambaLOB trailed DeepLOB. In other words, on the target Indian market the selective-SSM transfers
+\emph{better} than on the benchmark, delivering competitive accuracy at roughly $1/27$ of TLOB's
+parameters. On BANKNIFTY MambaLOB is on par with DeepLOB (both $\approx$0.46--0.48), below TLOB. Macro $F_1$
+(NIFTY) follows the same order: DeepLOB 0.39--0.42, MLPLOB 0.44--0.47, MambaLOB 0.44--0.50, TLOB 0.53--0.58.
+
+\subsubsection{Error Profiling and Bias Detection}
+The dominant effect is class balance. Under the fixed threshold the Stationary class is small at long
+horizons (near-binary), whereas under the spread-relative scheme it dominates. Confusion matrices show
+errors concentrated on the minority directional classes, which is why macro $F_1$ trails weighted $F_1$.
+
+\subsubsection{Lessons Learned}
+(1) \textbf{Metric convention matters}: the FI-2010 headline ($\sim$83.4) is a \emph{weighted} $F_1$; our
+weighted $F_1$ matches it, while our macro $F_1$ ($\approx$72) matches \emph{independent} reproductions
+(LOBCAST). We therefore report both. (2) \textbf{F1 $\ne$ profit}: see Section~3.6 / 3.10. (3)
+\textbf{Mamba is primarily an efficiency win}: it trails on FI-2010 accuracy, yet on the NSE transfer it is
+competitive --- beating the CNN baseline (DeepLOB) on NIFTY --- at a fraction of the parameters and compute.
+
+\subsubsection{Improved MambaLOB Architectures (Tier-B)}
+We tested two architectural improvements to the vanilla SSM stack --- \emph{bidirectional} Mamba (a forward
+and a time-reversed scan, averaged) and \emph{ConvMambaLOB} (DeepLOB's Conv+Inception spatial front-end
+feeding a Mamba temporal core, replacing DeepLOB's sequential LSTM) --- plus their combination, all trained
+on the best (\texttt{all}) feature set against the TLOB transformer. Table~\ref{tab:tierb} reports the mean
+over both instruments and $k\in\{10,100\}$.
+\begin{table}[h]
+\centering
+\caption{Tier-B architectures (NIFTY+BANKNIFTY, mean over $k\in\{10,100\}$, \texttt{all} features, single seed).}
+\label{tab:tierb}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+Model & Params & wF1 & mF1 & \% of TLOB wF1 \\
+\midrule
+MambaLOB (base)       & \textbf{70k}  & 0.595 & 0.508 & 89\% \\
+\;+ bidirectional     & 135k & 0.597 & 0.509 & 90\% \\
+\;+ Conv (ConvMambaLOB) & 144k & \textbf{0.602} & \textbf{0.518} & \textbf{90\%} \\
+\;+ both              & 209k & 0.587 & 0.508 & 88\% \\
+TLOB (SOTA)           & 1.80M & \textbf{0.666} & \textbf{0.570} & 100\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+\textbf{Honest verdict: an efficiency result, not an accuracy win.} TLOB still leads weighted \emph{and}
+macro $F_1$ in every (instrument, horizon) cell; our variants win none, trailing by $\approx$0.06--0.08 wF1.
+The contribution is the trade-off: \textbf{ConvMambaLOB recovers $\sim$90\% of the transformer's quality with
+$12.5\times$ fewer parameters}. Among our own designs the hybrid \emph{spatial-convolution} front-end is the
+decisive choice (best or near-best in all four cells); bidirectionality is roughly neutral on average (it
+helps BANKNIFTY $k{=}100$ by $+0.037$ but hurts NIFTY $k{=}10$), and \emph{stacking} both is the weakest
+Mamba variant --- more parameters, no gain, consistent with mild overfitting on the single-seed,
+one-month NSE sample. Multi-seed confidence intervals (Tier~C) are needed before claiming significance.
+
+\subsection{Originality and Innovation in Approach}
+\subsubsection{Creative Framing of the Problem}
+The first ML-ready NSE index-futures LOB benchmark, framed honestly for snapshot depth data (an ``event''
+is a change in the top-of-book), and a transaction-cost-relative labelling scheme that exposes when signal
+is economically meaningful.
+\subsubsection{Experimental Innovations}
+MambaLOB (selective SSM for LOB classification); \textbf{ConvMambaLOB}, a hybrid that fuses DeepLOB's spatial
+convolutions with a linear-time selective-SSM temporal core (Section~3.6); a controlled long-context
+experiment exploiting Mamba's linear scaling; and two labelling schemes (fixed vs spread-relative) reported
+side by side.
+
+\subsection{Risk Assessment and Project Management}
+\subsubsection{Progress Tracker vs.\ Original Timeline}
+Completed: literature survey; the engineered NSE dataset + pipeline; FI-2010 reproduction (DeepLOB, MLPLOB,
+TLOB); MambaLOB on FI-2010 + efficiency analysis; the \emph{complete} NSE Scheme-A matrix (all four models,
+both instruments, four horizons). Deferred (next phase): Scheme-B confirmatory training, multi-seed
+confidence intervals, and the cost-aware backtest.
+\subsubsection{Bottlenecks and Delays}
+Free-tier GPU throttling (mitigated by moving from Colab to Kaggle, which has a separate quota); a Kaggle
+P100 incompatible with the latest PyTorch CUDA build (use T4); \texttt{mamba-ssm} failing to build under
+pip build isolation; and session time-outs on long matrices.
+\subsubsection{Risk Mitigation Strategies}
+\texttt{mamba-ssm} installed with \texttt{--no-build-isolation}; per-run S3 upload + pull-on-start makes
+every long matrix resumable (a time-out costs at most the run in flight); host-agnostic secrets/data so the
+same notebooks run on Colab or Kaggle.
+
+\subsection{Experimental Reproducibility}
+\subsubsection{Data Splits and Control Measures}
+FI-2010: standard CF\_7 (7 train / 1 val / 3 test days). NSE: chronological front-month split (train
+12 May--4 June; test 5--12 June). Normalization statistics are computed on training data only; windows and
+labels never cross a day/contract boundary.
+\subsubsection{Random Seed Control}
+A \texttt{set\_seed} utility seeds Python/NumPy/PyTorch; the headline configurations are scheduled for
+3-seed runs with bootstrap 95\% confidence intervals (deferred to the next phase). All results, metrics
+JSON, and checkpoints are versioned on S3 under \texttt{reproduction/}.
+
+\subsection{Scalability and Efficiency Considerations}
+\subsubsection{Memory, Time, and Resource Profiling}
+\begin{table}[h]
+\centering
+\caption{Efficiency at $L{=}100$, batch 1 (inference).}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Model & Params & Latency (ms) & Peak mem (MB) \\
+\midrule
+DeepLOB & 191k & 1.5 & 30 \\
+MLPLOB & 529k & 0.2 & 22 \\
+TLOB & 1.80M & 6.1 & 27 \\
+MambaLOB & \textbf{68k} & 1.5 & 20 \\
+\bottomrule
+\end{tabular}
+\end{table}
+\begin{table}[h]
+\centering
+\caption{Scaling with sequence length (batch 32): TLOB $O(L^2)$ vs MambaLOB $O(L)$.}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+$L$ & TLOB params & TLOB mem / latency & Mamba params & Mamba mem / latency \\
+\midrule
+100 & 1.8M  & 49 MB / 11 ms  & 68k & 32 MB / 1.5 ms \\
+400 & 13.5M & 164 MB / 54 ms & 68k & 69 MB / 1.8 ms \\
+800 & 51M   & 400 MB / 164 ms & 68k & 118 MB / 5.3 ms \\
+\bottomrule
+\end{tabular}
+\end{table}
+\textbf{Headline efficiency result.} MambaLOB's parameter count is constant in $L$ and its
+memory/latency grow \emph{linearly}, while TLOB grows \emph{quadratically}. At $L{=}800$ MambaLOB is
+$\approx$31$\times$ faster, uses $\approx$3.4$\times$ less memory, and has $\approx$750$\times$ fewer
+parameters --- a clean demonstration of the linear-scaling advantage that motivates the architecture.
+(FLOP counts for Mamba are under-reported by the profiler because the fused CUDA kernel is not traced; we
+therefore rely on measured latency and memory.)
+\subsubsection{Scalability Constraints}
+Training throughput is bounded by data loading and the sequential scan rather than raw FLOPs; the
+spread-relative task is degenerate at short horizons; and real-time deployment is out of scope.
+
+\subsection{Ethical Considerations and Responsible AI Use}
+\subsubsection{Generative AI Usage Disclosure}
+Generative-AI assistance (a coding/writing assistant) was used for code scaffolding, debugging, drafting
+documentation, and report formatting. All generated content and code were reviewed, tested, and validated
+before inclusion.
+\subsubsection{Bias and Fairness in Dataset}
+The data are public benchmark data and self-collected public market data; there is no personal or
+demographic data. The main ``bias'' risk is class imbalance, which we address with class-weighted loss and
+by reporting macro $F_1$ and baselines.
+
+\subsection{Feedback Incorporation and Continuous Improvement}
+\subsubsection{Peer and Mentor Feedback Summary}
+Feedback drove: separating weighted vs macro $F_1$ reporting; checking the spread-relative label balance
+before training (which revealed degeneracy and saved a large, pointless run); and prioritising the
+data-engineering narrative.
+\subsubsection{Reflection and Learning Journey}
+The project built skills across data engineering (binary protocol decoding, cloud collection, robust
+preprocessing), reproducible deep-learning experimentation, and honest empirical evaluation under cost and
+compute constraints.
+
+\subsection{Chapter Summary and Next Steps}
+We engineered an NSE index-futures LOB dataset, reproduced three baselines on FI-2010, introduced MambaLOB
+with a strong efficiency result, and completed the NSE Scheme-A transfer study (where MambaLOB transfers
+competitively, beating the CNN baseline on NIFTY).
+
+\medskip\noindent\textbf{Next steps --- Phase 2 (planned, pending mentor discussion).} The work so far is
+strong on data engineering, reproduction, and transfer; Phase~2 deepens the \emph{Data-Science} contribution
+so the novelty is unambiguous. It has three tiers:
+
+\noindent\emph{(A) Microstructure feature engineering (DE\,$\rightarrow$\,DS bridge; novel) --- \textbf{done},
+see Section~3.3.} Engineered OFI, depth imbalance, micro-price, relative spread, and the Dhan-unique
+order-count channel, ablated against the raw window. Result: microstructure features help (best set lifts
+MambaLOB weighted-$F_1$ by up to $+0.068$ at k=100), order counts help only in combination, and book depth
+beyond level~10 is uninformative. Multi-seed CIs (Tier~C) remain to confirm significance.
+
+\noindent\emph{(B) Improved MambaLOB architecture (the headline novelty) --- \textbf{done}, see Section~3.6.}
+Built and evaluated (i) \textbf{bidirectional Mamba} and (ii) \textbf{ConvMambaLOB} (DeepLOB convolutions
+$\rightarrow$ linear-time Mamba core), plus their combination, against TLOB. Result: ConvMambaLOB recovers
+$\sim$90\% of TLOB's weighted-$F_1$ at $12.5\times$ fewer parameters --- an efficiency win, not an accuracy
+win (TLOB still leads). The spatial-convolution front-end is the decisive design; bidirectionality and
+stacking give diminishing returns. Multi-seed CIs (Tier~C) remain to confirm significance.
+
+\noindent\emph{(C) Rigour layer (expected practice).} Hyperparameter optimization (Optuna) on the best
+variant with an equal budget for baselines; a class-imbalance study (focal loss vs class-weighted CE vs
+class-balanced sampling vs label smoothing); statistical significance (multi-seed bootstrap CIs +
+Diebold--Mariano / permutation tests for pairwise comparison); and probability calibration (temperature
+scaling) feeding the cost-aware backtest.
+
+\noindent Also carried over from the interim plan: the Scheme-B confirmatory training, the cost-aware
+backtest, a walk-forward robustness check, and consolidation into the final report. A standalone
+\texttt{docs/phase2\_plan.md} tracks this in detail.
+
+\paragraph{Appendices (planned).} Detailed per-(model, symbol, horizon) result tables; confusion-matrix and
+scaling figures; the notebook$\rightarrow$result map; and reproducibility artefacts (\texttt{requirements},
+seeds, S3 paths).
+
+\end{document}

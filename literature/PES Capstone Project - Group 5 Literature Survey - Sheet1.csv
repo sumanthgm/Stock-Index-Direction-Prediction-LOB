@@ -1,0 +1,33 @@
+Sl No,Paper,link,Year,Assinged to,Status
+1,Deep Limit Order Book Forecasting,https://arxiv.org/abs/2403.09267,2025,Joseph Raj,
+2,Short-term stock price trend prediction with imaging high frequency limit order book data,https://www.sciencedirect.com/science/article/abs/pii/S0169207023001073,2023,Joseph Raj,
+3,Predicting Stock Price Changes Based on the Limit Order Book: A Survey,https://www.mdpi.com/2227-7390/10/8/1234,2022,Joseph Raj,
+4,Forecasting the Mid-price Movements with High-Frequency LOB: A Dual-Stage Temporal Attention-Based Deep Learning Architecture,https://www.researchgate.net/publication/363490500_Forecasting_the_Mid-price_Movements_with_High-Frequency_LOB_A_Dual-Stage_Temporal_Attention-Based_Deep_Learning_Architecture,2022,Joseph Raj,
+5,A Benchmark Study For Limit Order Book (LOB) Models and Time Series Forecasting Models on LOB Data,https://openreview.net/forum?id=MhD9rLeU31,2025,Sumanth,
+6,"MID-PRICE FORECASTING IN LIMIT ORDER
+BOOKS WITH GAUSSIAN PROCESS MODELS",https://trepo.tuni.fi/bitstream/handle/10024/162261/LiuRui.pdf?sequence=2,2024,Sumanth,
+7,Lob-based deep learning models for stock price trend prediction: a benchmark study,https://link.springer.com/article/10.1007/s10462-024-10715-4,2024,Sumanth,
+8,Axial-LOB: High-Frequency Trading with Axial Attention,https://ieeexplore.ieee.org/abstract/document/10022284,2024,Sumanth,
+9,Bayesian bilinear neural network for predicting the mid‐price dynamics in limit‐order book markets,https://onlinelibrary.wiley.com/doi/full/10.1002/for.2955,2023,Kumar,
+10,A deep learning approach to estimating fill probabilities in a limit order book,https://www.tandfonline.com/doi/abs/10.1080/14697688.2022.2124189,2022,Kumar,
+11,Detecting Multilevel Manipulation from Limit Order Book via Cascaded Contrastive Representation Learning,https://arxiv.org/abs/2508.17086,2025,Kumar,
+12,Stock Price Analysis and Prediction Using Fully Connected Neural Networks,https://www.researchgate.net/publication/400355284_Stock_Price_Analysis_and_Prediction_Using_Fully_Connected_Neural_Networks,2026,Kumar,
+13,Modeling of limit order book data with ordered fuzzy numbers,https://www.sciencedirect.com/science/article/pii/S1568494624003296,2024,Kumar,
+,,,,,
+14,Spread Movement Prediction for Pairs Trading with High-Frequency Limit Order Data,https://ieeexplore.ieee.org/abstract/document/9736495,2022,Abhishek,In Progress ( Sign In Required ) 
+15,Continuous-time modeling of financial returns based on Limit Order Book data,https://www.sciencedirect.com/science/article/pii/S2405896323005694,2023,Abhishek,Downloaded
+16,"Deep Hybrid Models for Forecasting
+Stock Midprices from the High-Frequency
+Limit Order Book",https://www.researchgate.net/profile/Khuong-Nguyen-An/publication/365586821_Deep_Hybrid_Models_for_Forecasting_Stock_Midprices_from_the_High-Frequency_Limit_Order_Book/links/65394ae81d6e8a70704e48e1/Deep-Hybrid-Models-for-Forecasting-Stock-Midprices-from-the-High-Frequency-Limit-Order-Book.pdf,2022,Abhishek,Downloaded
+17,Analysis of Enhanced Hidden Markov Models for Improved Stock Market Price Forecasting and Prediction,https://dl.acm.org/doi/abs/10.1145/3660853.3660922,2024,Abhishek,Downloaded
+18,Stock Market Price Analysis and Prediction of Financial Industry Based on the Time Series Method,https://www.deanfrancis.press/ojs/index.php/te/article/view/1345,2024,Abhishek,Downloaded
+,,,,,
+19,Hybrid AI Models for Real-Time Stock Management and Market Price Prediction,https://www.researchgate.net/publication/400355284_Stock_Price_Analysis_and_Prediction_Using_Fully_Connected_Neural_Networks,2026,Raghav,
+20,"Effectiveness of Open, High and Low Prices in Stock Market Price Prediction",https://apcz.umk.pl/CJFA/article/view/59253,2025,Raghav,
+21,Stock Market Price Prediction and Forecasting Using Stacked LSTM,https://ijsrem.com/download/stock-market-price-prediction-and-forecasting-using-stacked-lstm/,2024,Raghav,
+22,The Intraday Dynamics Predictor: A TrioFlow Fusion of Convolutional Layers and Gated Recurrent Units for High-Frequency Price Movement Forecasting,https://www.mdpi.com/2076-3417/14/7/2984,2024,Raghav,
+23,Automated Creation of a High-Performing Algorithmic Trader via Deep Learning on Level-2 Limit Order Book Data,https://ieeexplore.ieee.org/abstract/document/9308266,2020,Saagar,
+24,Deep limit order book forecasting: a microstructural guide,https://www.tandfonline.com/doi/full/10.1080/14697688.2025.2522911,2025,Saagar,
+25,Analyzing the Importance of Broker Identities in the Limit Order Book Through Deep Learning,https://journals.sagepub.com/doi/full/10.1089/big.2020.0053,2020,Saagar,
+26,Deep Learning vs. Traditional Machine Learning in Financial Market Predictions,https://www.researchgate.net/publication/393127243_Deep_Learning_vs_Traditional_Machine_Learning_in_Financial_Market_Predictions,2024,Saagar,
+27,Deep learning-based LDL-C level prediction and explainable AI interpretation,https://www.sciencedirect.com/science/article/abs/pii/S0010482525002562,2025,Saagar,
