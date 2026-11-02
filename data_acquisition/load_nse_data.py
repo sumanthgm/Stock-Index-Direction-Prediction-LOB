@@ -43,17 +43,14 @@ IST = timezone(timedelta(hours=5, minutes=30))
 def _s3_parquet_paths(source: str, start: str | None, end: str | None) -> list[str]:
     import s3fs
 
-    fs = (
-        s3fs.S3FileSystem()
-    )  # picks up AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY from env
+    fs = s3fs.S3FileSystem()  # picks up AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY from env
     prefix = f"{BUCKET_NAME}/lob-data/{source}/"
     try:
         all_files = fs.ls(prefix)
-    except FileNotFoundError:
+    except FileNotFoundError as err:
         raise FileNotFoundError(
-            f"No files found at s3://{prefix}\n"
-            "Check BUCKET_NAME and that sync_to_s3.sh has run at least once."
-        )
+            f"No files found at s3://{prefix}\nCheck BUCKET_NAME and that sync_to_s3.sh has run at least once."
+        ) from err
 
     paths = []
     for f in sorted(all_files):
@@ -69,9 +66,7 @@ def _s3_parquet_paths(source: str, start: str | None, end: str | None) -> list[s
         paths.append(f"s3://{f}")
 
     if not paths:
-        raise FileNotFoundError(
-            f"No Parquet files for source='{source}', range {start}–{end}."
-        )
+        raise FileNotFoundError(f"No Parquet files for source='{source}', range {start}–{end}.")
     return paths
 
 
@@ -138,16 +133,12 @@ def to_lob_tensor(
 
     missing = [c for c in feature_cols if c not in df.columns]
     if missing:
-        raise ValueError(
-            f"Missing columns: {missing}. Reduce `levels` or check source."
-        )
+        raise ValueError(f"Missing columns: {missing}. Reduce `levels` or check source.")
 
     data = df[feature_cols].to_numpy(dtype="float32")
     n_windows = len(data) - seq_len + 1
     if n_windows <= 0:
-        raise ValueError(
-            f"DataFrame has {len(data)} rows, need at least {seq_len} for seq_len={seq_len}."
-        )
+        raise ValueError(f"DataFrame has {len(data)} rows, need at least {seq_len} for seq_len={seq_len}.")
 
     idx = np.arange(seq_len)[None, :] + np.arange(n_windows)[:, None]
     return data[idx]  # (n_windows, seq_len, 4*levels)

@@ -33,17 +33,12 @@ INSTRUMENTS = {
     "2885": "RELIANCE",
 }
 
-WS_URL = (
-    f"wss://depth-api-feed.dhan.co/twentydepth"
-    f"?token={ACCESS_TOKEN}&clientId={CLIENT_ID}&authType=2"
-)
+WS_URL = f"wss://depth-api-feed.dhan.co/twentydepth?token={ACCESS_TOKEN}&clientId={CLIENT_ID}&authType=2"
 
 SUBSCRIBE_MSG = {
     "RequestCode": 23,
     "InstrumentCount": len(INSTRUMENTS),
-    "InstrumentList": [
-        {"ExchangeSegment": "NSE_EQ", "SecurityId": sid} for sid in INSTRUMENTS
-    ],
+    "InstrumentList": [{"ExchangeSegment": "NSE_EQ", "SecurityId": sid} for sid in INSTRUMENTS],
 }
 
 # NSE large-cap price range (plausibility check)
@@ -167,9 +162,7 @@ def try_structure(data: bytes, header: int, level_size: int, n_levels: int, fmt:
         print(f"\n  {label}")
         print(f"    bid L1-L5: {[f'{p:.2f}' for p in prices[0][:5]]}")
         print(f"    ask L1-L5: {[f'{p:.2f}' for p in prices[1][:5]]}")
-        print(
-            f"    plausible bid={bid_plausible}/{n_levels}  ask={ask_plausible}/{n_levels}"
-        )
+        print(f"    plausible bid={bid_plausible}/{n_levels}  ask={ask_plausible}/{n_levels}")
         return True
     return False
 
@@ -192,9 +185,7 @@ def analyse(pkt: bytes, idx: int):
     for off in range(0, min(64, size - 3), 1):
         v = struct.unpack_from("<I", pkt, off)[0]
         if v in (1333, 10604, 2885):
-            sym = {"1333": "HDFCBANK", "10604": "INFY", "2885": "RELIANCE"}.get(
-                str(v), "?"
-            )
+            sym = {"1333": "HDFCBANK", "10604": "INFY", "2885": "RELIANCE"}.get(str(v), "?")
             print(f"  Offset {off}: security_id={v} ({sym})")
 
     # Scan entire packet for plausible prices
@@ -228,9 +219,7 @@ def analyse(pkt: bytes, idx: int):
     if not found_any:
         print("  No matching structure found. Try the dhanhq official library.")
         print("  Or print the full packet to check manually with:")
-        print(
-            "  python3 -c \"import sys; data=open(sys.argv[1],'rb').read(); print(data.hex())\" packet.bin"
-        )
+        print("  python3 -c \"import sys; data=open(sys.argv[1],'rb').read(); print(data.hex())\" packet.bin")
 
 
 # ---------------------------------------------------------------------------
@@ -255,14 +244,10 @@ async def main():
     sizes = [len(p) for p in packets]
     print(f"\n\nPacket sizes seen: {sizes}")
     if len(set(sizes)) > 1:
-        print(
-            "  Multiple sizes → check if large = 2× small (two instruments per message)"
-        )
+        print("  Multiple sizes → check if large = 2× small (two instruments per message)")
         for s in set(sizes):
             if s * 2 in sizes:
-                print(
-                    f"  {s}B × 2 = {s * 2}B ✓ — large packets are two records back-to-back"
-                )
+                print(f"  {s}B × 2 = {s * 2}B ✓ — large packets are two records back-to-back")
 
 
 if __name__ == "__main__":

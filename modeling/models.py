@@ -179,9 +179,7 @@ class _MambaBlock(nn.Module):
     Drop-in replacement — same input/output shape.
     """
 
-    def __init__(
-        self, d_model: int, d_state: int = 16, d_conv: int = 4, expand: int = 2
-    ):
+    def __init__(self, d_model: int, d_state: int = 16, d_conv: int = 4, expand: int = 2):
         super().__init__()
         self.d_model = d_model
         self.d_state = d_state
@@ -195,12 +193,7 @@ class _MambaBlock(nn.Module):
         self.C_proj = nn.Linear(self.d_inner, d_state, bias=False)
 
         # Fixed A initialised log-uniformly (from original Mamba paper)
-        A = (
-            torch.arange(1, d_state + 1, dtype=torch.float32)
-            .unsqueeze(0)
-            .expand(self.d_inner, -1)
-            .contiguous()
-        )
+        A = torch.arange(1, d_state + 1, dtype=torch.float32).unsqueeze(0).expand(self.d_inner, -1).contiguous()
         self.A_log = nn.Parameter(torch.log(A))
         self.D = nn.Parameter(torch.ones(self.d_inner))
 
@@ -238,9 +231,7 @@ class _MambaBlock(nn.Module):
 
         # Discretised selective SSM scan (sequential, O(L) loop)
         B_size, L, _ = x_in.shape
-        h = torch.zeros(
-            B_size, self.d_inner, self.d_state, device=x.device, dtype=x.dtype
-        )
+        h = torch.zeros(B_size, self.d_inner, self.d_state, device=x.device, dtype=x.dtype)
         ys = []
         for t in range(L):
             dt_t = dt[:, t, :].unsqueeze(-1)  # (B, d_inner, 1)
@@ -296,9 +287,7 @@ def _resolve_mamba_cls(d_state: int, use_cuda_mamba: bool, who: str = "Mamba"):
     return mamba_cls
 
 
-def _make_mamba_layers(
-    mamba_cls, d_model: int, d_state: int, n_layers: int, bidirectional: bool
-) -> nn.ModuleList:
+def _make_mamba_layers(mamba_cls, d_model: int, d_state: int, n_layers: int, bidirectional: bool) -> nn.ModuleList:
     def one():
         if bidirectional:
             return _BiMamba(mamba_cls, d_model, d_state=d_state)
@@ -345,17 +334,13 @@ class MambaLOB(nn.Module):
         self.input_proj = nn.Linear(n_features, d_model)
 
         mamba_cls = _resolve_mamba_cls(d_state, use_cuda_mamba, who="MambaLOB")
-        self.mamba_layers = _make_mamba_layers(
-            mamba_cls, d_model, d_state, n_layers, bidirectional
-        )
+        self.mamba_layers = _make_mamba_layers(mamba_cls, d_model, d_state, n_layers, bidirectional)
 
         # Optional spatial self-attention over the feature axis (from TLOB)
         self.spatial_attn = None
         if spatial_heads > 0:
             self.spatial_norm = nn.LayerNorm(seq_len)
-            self.spatial_attn = nn.MultiheadAttention(
-                embed_dim=seq_len, num_heads=spatial_heads, batch_first=True
-            )
+            self.spatial_attn = nn.MultiheadAttention(embed_dim=seq_len, num_heads=spatial_heads, batch_first=True)
 
         self.bn = BilinearNorm(d_model)
         self.fc = nn.Linear(d_model, 3)
@@ -441,9 +426,7 @@ class ConvMambaLOB(nn.Module):
         self.proj = nn.Linear(c_out * f_out, d_model)
 
         mamba_cls = _resolve_mamba_cls(d_state, use_cuda_mamba, who="ConvMambaLOB")
-        self.mamba_layers = _make_mamba_layers(
-            mamba_cls, d_model, d_state, n_layers, bidirectional
-        )
+        self.mamba_layers = _make_mamba_layers(mamba_cls, d_model, d_state, n_layers, bidirectional)
 
         self.bn = BilinearNorm(d_model)
         self.fc = nn.Linear(d_model, 3)

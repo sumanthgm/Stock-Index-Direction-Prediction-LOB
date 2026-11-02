@@ -112,9 +112,7 @@ class TransformerLayer(nn.Module):
         super().__init__()
         self.norm = nn.LayerNorm(hidden_dim)
         self.qkv = ComputeQKV(hidden_dim, num_heads)
-        self.attention = nn.MultiheadAttention(
-            hidden_dim * num_heads, num_heads, batch_first=True
-        )
+        self.attention = nn.MultiheadAttention(hidden_dim * num_heads, num_heads, batch_first=True)
         self.mlp = MLP(hidden_dim, hidden_dim * 4, final_dim)
         self.w0 = nn.Linear(hidden_dim * num_heads, hidden_dim)
 
@@ -131,13 +129,9 @@ class TransformerLayer(nn.Module):
         return x
 
 
-def sinusoidal_positional_embedding(
-    token_sequence_size, token_embedding_dim, n=10000.0
-):
+def sinusoidal_positional_embedding(token_sequence_size, token_embedding_dim, n=10000.0):
     if token_embedding_dim % 2 != 0:
-        raise ValueError(
-            f"Sinusoidal positional embedding needs an even dim (got {token_embedding_dim})"
-        )
+        raise ValueError(f"Sinusoidal positional embedding needs an even dim (got {token_embedding_dim})")
     T, d = token_sequence_size, token_embedding_dim
     positions = torch.arange(0, T).unsqueeze(1)
     embeddings = torch.zeros(T, d)
@@ -168,9 +162,7 @@ class TLOB(nn.Module):
         self.norm_layer = BiN(num_features, seq_size)
         self.emb_layer = nn.Linear(num_features, hidden_dim)
         if is_sin_emb:
-            self.register_buffer(
-                "pos_encoder", sinusoidal_positional_embedding(seq_size, hidden_dim)
-            )
+            self.register_buffer("pos_encoder", sinusoidal_positional_embedding(seq_size, hidden_dim))
         else:
             self.pos_encoder = nn.Parameter(torch.randn(1, seq_size, hidden_dim))
 
@@ -180,9 +172,7 @@ class TLOB(nn.Module):
                 self.layers.append(TransformerLayer(hidden_dim, num_heads, hidden_dim))
                 self.layers.append(TransformerLayer(seq_size, num_heads, seq_size))
             else:  # last pair reduces dimensionality before the head
-                self.layers.append(
-                    TransformerLayer(hidden_dim, num_heads, hidden_dim // 4)
-                )
+                self.layers.append(TransformerLayer(hidden_dim, num_heads, hidden_dim // 4))
                 self.layers.append(TransformerLayer(seq_size, num_heads, seq_size // 4))
 
         total_dim = (hidden_dim // 4) * (seq_size // 4)

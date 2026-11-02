@@ -18,7 +18,6 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import torch
-
 from fi2010_dataset import make_loader
 from train import DEVICE
 

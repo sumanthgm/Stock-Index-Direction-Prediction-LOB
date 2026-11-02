@@ -1,0 +1,22 @@
+# Modeling (training runs on a CUDA GPU: Colab or Kaggle)
+torch>=2.2
+numpy>=1.26
+pandas>=2.0
+scikit-learn>=1.4
+optuna>=3.5            # run_hpo.py
+# mamba-ssm            # optional, CUDA-only fast Mamba kernels; models fall back to pure PyTorch without it
+
+# NSE data access (S3 parquet)
+pyarrow>=14
+s3fs>=2024.2
+boto3>=1.34
+
+# Live data acquisition (EC2 collectors)
+python-dotenv>=1.0
+websockets>=12
+requests>=2.31
+kiteconnect>=5.0
+
+# Development
+pytest>=8.0
+ruff>=0.5

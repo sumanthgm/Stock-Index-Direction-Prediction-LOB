@@ -26,17 +26,12 @@ INSTRUMENTS = {
     "2885": "RELIANCE",
 }
 
-WS_URL = (
-    f"wss://depth-api-feed.dhan.co/twentydepth"
-    f"?token={ACCESS_TOKEN}&clientId={CLIENT_ID}&authType=2"
-)
+WS_URL = f"wss://depth-api-feed.dhan.co/twentydepth?token={ACCESS_TOKEN}&clientId={CLIENT_ID}&authType=2"
 
 SUBSCRIBE_MSG = {
     "RequestCode": 23,
     "InstrumentCount": len(INSTRUMENTS),
-    "InstrumentList": [
-        {"ExchangeSegment": "NSE_EQ", "SecurityId": sid} for sid in INSTRUMENTS
-    ],
+    "InstrumentList": [{"ExchangeSegment": "NSE_EQ", "SecurityId": sid} for sid in INSTRUMENTS],
 }
 
 PRICE_MIN, PRICE_MAX = 50.0, 50_000.0
@@ -67,9 +62,7 @@ async def capture_single_record() -> bytes:
                 return msg[:1992]
 
 
-def read_levels(
-    pkt: bytes, start: int, n: int, level_size: int, price_offset: int = 0
-) -> list:
+def read_levels(pkt: bytes, start: int, n: int, level_size: int, price_offset: int = 0) -> list:
     """Read n levels starting at `start`, price at level+price_offset (float64)."""
     prices = []
     for i in range(n):
@@ -102,9 +95,7 @@ def analyse(pkt: bytes):
     # Confirm ask at 360
     ask_prices = read_levels(pkt, ASK_START, 20, LEVEL_SIZE, price_offset=0)
     plausible_ask = [p for p in ask_prices if PRICE_MIN <= p <= PRICE_MAX]
-    print(
-        f"\n=== CONFIRMED: Ask at offset {ASK_START}, level_size={LEVEL_SIZE}B, price at +0 ==="
-    )
+    print(f"\n=== CONFIRMED: Ask at offset {ASK_START}, level_size={LEVEL_SIZE}B, price at +0 ===")
     print(f"  Ask L1-L10: {[f'{p:.2f}' for p in ask_prices[:10]]}")
     print(f"  Plausible: {len(plausible_ask)}/20")
 
@@ -156,16 +147,10 @@ def analyse(pkt: bytes):
         if len(candidates) >= window:
             # Check if monotone
             prices_only = [p for _, p in candidates]
-            diffs = [
-                prices_only[i + 1] - prices_only[i] for i in range(len(prices_only) - 1)
-            ]
-            if diffs and all(
-                abs(d - diffs[0]) < 0.001 and abs(diffs[0]) < 2.0 for d in diffs
-            ):
+            diffs = [prices_only[i + 1] - prices_only[i] for i in range(len(prices_only) - 1)]
+            if diffs and all(abs(d - diffs[0]) < 0.001 and abs(diffs[0]) < 2.0 for d in diffs):
                 direction = "ASC" if diffs[0] > 0 else "DESC"
-                print(
-                    f"  Monotone sequence at offset {start}: {prices_only} ({direction}, step={diffs[0]:.3f})"
-                )
+                print(f"  Monotone sequence at offset {start}: {prices_only} ({direction}, step={diffs[0]:.3f})")
 
     # Print hex of potential bid region (680-800)
     print("\n=== Hex dump: offset 680-800 (expected bid region) ===")

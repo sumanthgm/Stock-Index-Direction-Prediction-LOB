@@ -77,18 +77,12 @@ MARKET_CLOSE = datetime.time(15, 30)
 
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "data", "dhan")
 
-WS_URL = (
-    f"wss://depth-api-feed.dhan.co/twentydepth"
-    f"?token={ACCESS_TOKEN}&clientId={CLIENT_ID}&authType=2"
-)
+WS_URL = f"wss://depth-api-feed.dhan.co/twentydepth?token={ACCESS_TOKEN}&clientId={CLIENT_ID}&authType=2"
 
 SUBSCRIBE_MSG = {
     "RequestCode": 23,
     "InstrumentCount": len(INSTRUMENTS),
-    "InstrumentList": [
-        {"ExchangeSegment": INSTRUMENT_SEGMENTS[sid], "SecurityId": sid}
-        for sid in INSTRUMENTS
-    ],
+    "InstrumentList": [{"ExchangeSegment": INSTRUMENT_SEGMENTS[sid], "SecurityId": sid} for sid in INSTRUMENTS],
 }
 
 logging.basicConfig(
@@ -214,9 +208,7 @@ def _parse_compact(data: bytes, offset: int) -> tuple | None:
             price = struct.unpack_from("<d", data, off + _COMPACT_PRICE_OFF)[0]
             qty = struct.unpack_from("<I", data, off + _COMPACT_QTY_OFF)[0]
             orders = struct.unpack_from("<I", data, off + _COMPACT_ORDERS_OFF)[0]
-            levels_list.append(
-                (price if PRICE_MIN <= price <= PRICE_MAX else None, qty, orders)
-            )
+            levels_list.append((price if PRICE_MIN <= price <= PRICE_MAX else None, qty, orders))
     return sid, bids, asks
 
 
@@ -240,11 +232,7 @@ def parse_message(data: bytes) -> list[tuple]:
         # Try full format first (it's larger and takes priority)
         if offset + PACKET_FULL <= len(data):
             result = _parse_full(data, offset)
-            if (
-                result
-                and result[0] in INSTRUMENTS
-                and _l1_plausible(result[1], result[2])
-            ):
+            if result and result[0] in INSTRUMENTS and _l1_plausible(result[1], result[2]):
                 records.append(result)
                 offset += PACKET_FULL
                 continue
@@ -293,9 +281,7 @@ async def collect(buf: ParquetBuffer):
 
         try:
             log.info("Connecting to Dhan twenty-depth feed...")
-            async with websockets.connect(
-                WS_URL, ping_interval=20, ping_timeout=30, open_timeout=15
-            ) as ws:
+            async with websockets.connect(WS_URL, ping_interval=20, ping_timeout=30, open_timeout=15) as ws:
                 await ws.send(json.dumps(SUBSCRIBE_MSG))
                 log.info(
                     "Subscribed to %d instruments: %s",
@@ -324,13 +310,9 @@ async def collect(buf: ParquetBuffer):
                 if datetime.datetime.now(IST).time() >= MARKET_CLOSE:
                     return
             else:
-                log.warning(
-                    "Connection closed: %s. Reconnecting in %ds.", e, reconnect_delay
-                )
+                log.warning("Connection closed: %s. Reconnecting in %ds.", e, reconnect_delay)
         except Exception as e:
-            log.warning(
-                "Connection error: %s. Reconnecting in %ds.", e, reconnect_delay
-            )
+            log.warning("Connection error: %s. Reconnecting in %ds.", e, reconnect_delay)
 
         buf.flush()
         await asyncio.sleep(reconnect_delay)

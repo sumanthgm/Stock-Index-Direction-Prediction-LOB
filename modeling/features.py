@@ -100,9 +100,7 @@ def micro_block(df, seg) -> tuple[np.ndarray, list[str]]:
         ],
         axis=0,
     )
-    block = np.column_stack(
-        [micro_price, rel_spread, depth_imb_l1, depth_imb_agg, ofi_l1, ofi_sum5]
-    )
+    block = np.column_stack([micro_price, rel_spread, depth_imb_l1, depth_imb_agg, ofi_l1, ofi_sum5])
     names = [
         "micro_price",
         "rel_spread",
@@ -130,9 +128,7 @@ def required_columns(feature_set: str) -> list[str]:
     """Raw parquet columns a feature set needs (so the loader reads only what's used)."""
     fs = feature_set.lower()
     if fs not in _VALID:
-        raise ValueError(
-            f"Unknown feature_set '{feature_set}'. Choose one of {_VALID}."
-        )
+        raise ValueError(f"Unknown feature_set '{feature_set}'. Choose one of {_VALID}.")
     levels = 20 if fs == "depth80" else N_LEVELS
     cols = set(_base_order(levels))
     cols |= set(_base_order(N_LEVELS))  # micro/labels always need L1..10 price+qty
@@ -159,9 +155,7 @@ def _depth80_matrix(df) -> tuple[np.ndarray, list[str]]:
     return np.column_stack(cols), names
 
 
-def build_features(
-    df, seg, feature_set: str = "base40"
-) -> tuple[np.ndarray, list[str]]:
+def build_features(df, seg, feature_set: str = "base40") -> tuple[np.ndarray, list[str]]:
     """Assemble the raw (pre-z-score) feature matrix for a feature set.
 
     Returns (X: (T, F) float64, feature_names). `seg` is the per-row segment id (used by OFI).
@@ -170,9 +164,7 @@ def build_features(
     """
     fs = feature_set.lower()
     if fs not in _VALID:
-        raise ValueError(
-            f"Unknown feature_set '{feature_set}'. Choose one of {_VALID}."
-        )
+        raise ValueError(f"Unknown feature_set '{feature_set}'. Choose one of {_VALID}.")
     if fs == "depth80":
         X, names = _depth80_matrix(df)
         return np.nan_to_num(X), names

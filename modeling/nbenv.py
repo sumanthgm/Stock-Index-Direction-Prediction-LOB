@@ -95,9 +95,7 @@ def s3_client(region: str = "ap-south-2"):
     for k in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"):
         os.environ.setdefault(k, get_secret(k))
     if not os.environ.get("AWS_SECRET_ACCESS_KEY"):
-        print(
-            "No AWS creds -> S3 sync OFF (results kept locally only). Add AWS_* secrets."
-        )
+        print("No AWS creds -> S3 sync OFF (results kept locally only). Add AWS_* secrets.")
         return None
     try:
         import boto3
@@ -108,9 +106,7 @@ def s3_client(region: str = "ap-south-2"):
         return None
 
 
-def s3_put(
-    client, localpath, bucket: str = "lob-capstone-data", prefix: str = ""
-) -> None:
+def s3_put(client, localpath, bucket: str = "lob-capstone-data", prefix: str = "") -> None:
     """Upload one file; key = '<prefix>/<localpath>'. No-op if client is None."""
     if client is None:
         return
@@ -121,9 +117,7 @@ def s3_put(
         print("   (s3 put skipped)", repr(e))
 
 
-def s3_pull(
-    client, localpath, bucket: str = "lob-capstone-data", prefix: str = ""
-) -> bool:
+def s3_pull(client, localpath, bucket: str = "lob-capstone-data", prefix: str = "") -> bool:
     """Download '<prefix>/<localpath>' to localpath (to resume). False if absent/None."""
     if client is None:
         return False
@@ -148,9 +142,7 @@ def _exp_key(area: str, localpath) -> str:
     return f"experiments/{area}/{kind}/{name}"
 
 
-def s3_put_area(
-    client, localpath, area: str, bucket: str = "lob-capstone-data"
-) -> None:
+def s3_put_area(client, localpath, area: str, bucket: str = "lob-capstone-data") -> None:
     """Upload one file into the clean layout experiments/<area>/<kind>/<basename>,
     routing by extension (.pt->checkpoints, .png->figures, else results)."""
     if client is None:
@@ -163,9 +155,7 @@ def s3_put_area(
         print("   (s3 put skipped)", repr(e))
 
 
-def s3_pull_area(
-    client, localpath, area: str, bucket: str = "lob-capstone-data"
-) -> bool:
+def s3_pull_area(client, localpath, area: str, bucket: str = "lob-capstone-data") -> bool:
     """Download experiments/<area>/<kind>/<basename> to localpath (to resume)."""
     if client is None:
         return False

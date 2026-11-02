@@ -57,14 +57,11 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-
 from fi2010_dataset import LOBDataset, WindowedLOBDataset
 
 # Portable: <repo>/data_acquisition/data/dhan  (this file lives in <repo>/modeling/).
 # Local convenience only — on Colab, data is pulled from S3 instead.
-DEFAULT_DATA_DIR = (
-    Path(__file__).resolve().parent.parent / "data_acquisition" / "data" / "dhan"
-)
+DEFAULT_DATA_DIR = Path(__file__).resolve().parent.parent / "data_acquisition" / "data" / "dhan"
 
 # Continuous front-month series: May-FUT (to expiry) + Jun-FUT.
 # 0-byte files 20260527/28/29 are omitted (broken expiry-roll collection).
@@ -113,9 +110,7 @@ def _dhan_to_fi2010_order() -> list[str]:
     return cols
 
 
-def _load_day(
-    path: Path, root: str, feature_cols: list[str] | None = None
-) -> pd.DataFrame:
+def _load_day(path: Path, root: str, feature_cols: list[str] | None = None) -> pd.DataFrame:
     """Read one day's Parquet, filter to the front-month contract for `root`.
 
     `root` is "NIFTY" or "BANKNIFTY". Each daily file holds exactly one futures
@@ -127,13 +122,9 @@ def _load_day(
     """
     base40 = _dhan_to_fi2010_order()
     feature_cols = feature_cols or base40
-    needed = (
-        ["timestamp", "symbol", "bid_price_1", "ask_price_1"] + base40 + feature_cols
-    )
+    needed = ["timestamp", "symbol", "bid_price_1", "ask_price_1"] + base40 + feature_cols
     df = pd.read_parquet(path, columns=list(dict.fromkeys(needed)))
-    is_front = df["symbol"].str.startswith(f"{root}-") & df["symbol"].str.endswith(
-        "-FUT"
-    )
+    is_front = df["symbol"].str.startswith(f"{root}-") & df["symbol"].str.endswith("-FUT")
     df = df[is_front].copy()
     if df.empty:
         return df
@@ -149,9 +140,7 @@ def _load_day(
     return df.reset_index(drop=True)
 
 
-def _outlier_mask(
-    mid: np.ndarray, threshold: float = TICK_SPIKE_THRESHOLD
-) -> np.ndarray:
+def _outlier_mask(mid: np.ndarray, threshold: float = TICK_SPIKE_THRESHOLD) -> np.ndarray:
     """Tick-return spike mask. True = keep.
 
     Drops only ticks that jump >`threshold` (default 0.5%) relative to the
@@ -171,9 +160,7 @@ def _outlier_mask(
     return keep
 
 
-def _load_and_clean(
-    dates: list[str], root: str, data_dir: Path, feature_cols: list[str] | None = None
-) -> pd.DataFrame:
+def _load_and_clean(dates: list[str], root: str, data_dir: Path, feature_cols: list[str] | None = None) -> pd.DataFrame:
     """Load + clean a list of date strings for one root. Returns a concatenated frame.
 
     Each row carries `_date` (the trading day) used downstream as the per-day
@@ -199,13 +186,11 @@ def _load_and_clean(
         df["_date"] = date
         pieces.append(df)
     if not pieces:
-        raise RuntimeError(f"No usable data for {symbol} in dates {dates}")
+        raise RuntimeError(f"No usable data for {root} in dates {dates}")
     return pd.concat(pieces, ignore_index=True)
 
 
-def _make_labels(
-    mid: np.ndarray, k: int, alpha: float, seg: np.ndarray | None = None
-) -> np.ndarray:
+def _make_labels(mid: np.ndarray, k: int, alpha: float, seg: np.ndarray | None = None) -> np.ndarray:
     """FI-2010 style smoothed-mid labels. Returns int8 array of {0,1,2} with -1 sentinel for edges.
 
     If `seg` is given, labels are computed independently within each contiguous
@@ -309,11 +294,8 @@ def load_nse(
     data_dir = Path(data_dir)
     train_dates = train_dates or TRAIN_DATES
     test_dates = test_dates or TEST_DATES
-    fi_cols = _dhan_to_fi2010_order()
 
-    print(
-        f"\nLoading NSE | root={root} (front-month) | horizon=k{horizon} | seq_len={seq_len} | alpha={alpha}"
-    )
+    print(f"\nLoading NSE | root={root} (front-month) | horizon=k{horizon} | seq_len={seq_len} | alpha={alpha}")
     print(f"  Train dates ({len(train_dates)}): {train_dates[0]}..{train_dates[-1]}")
     print(f"  Test  dates ({len(test_dates)}): {test_dates}")
 
@@ -338,22 +320,14 @@ def load_nse(
     print(f"  Feature set: {feature_set}  (F={train_feat_raw.shape[1]})")
 
     # ----- Labels on raw mid-price (alpha is in return space, scale-invariant) -----
-    train_mid = ((train_df["bid_price_1"] + train_df["ask_price_1"]) / 2).to_numpy(
-        dtype=np.float64
-    )
-    test_mid = ((test_df["bid_price_1"] + test_df["ask_price_1"]) / 2).to_numpy(
-        dtype=np.float64
-    )
+    train_mid = ((train_df["bid_price_1"] + train_df["ask_price_1"]) / 2).to_numpy(dtype=np.float64)
+    test_mid = ((test_df["bid_price_1"] + test_df["ask_price_1"]) / 2).to_numpy(dtype=np.float64)
     # ----- Threshold: Scheme A (fixed alpha) or Scheme B (spread-relative) -----
     if label_scheme.upper() == "B":
         # θ = mean relative spread over the train set (ties threshold to transaction cost)
-        tr_spread = (train_df["ask_price_1"] - train_df["bid_price_1"]).to_numpy(
-            dtype=np.float64
-        )
+        tr_spread = (train_df["ask_price_1"] - train_df["bid_price_1"]).to_numpy(dtype=np.float64)
         thr = float(np.mean(tr_spread / train_mid))
-        print(
-            f"  Scheme B (spread-relative): theta={thr:.2e}  (mean rel. spread, train)"
-        )
+        print(f"  Scheme B (spread-relative): theta={thr:.2e}  (mean rel. spread, train)")
     else:
         thr = alpha
         print(f"  Scheme A (fixed alpha): threshold={thr:.2e}")
@@ -392,9 +366,7 @@ def load_nse(
     test_ds.mid = test_mid
     test_ds.seg = test_seg
 
-    print(
-        f"  Splits   train: {len(train_ds):,}  val: {len(val_ds):,}  test: {len(test_ds):,}"
-    )
+    print(f"  Splits   train: {len(train_ds):,}  val: {len(val_ds):,}  test: {len(test_ds):,}")
     _print_dist("  train labels", train_ds.y.numpy())
     _print_dist("  val   labels", val_ds.y.numpy())
     _print_dist("  test  labels", test_ds.y.numpy())

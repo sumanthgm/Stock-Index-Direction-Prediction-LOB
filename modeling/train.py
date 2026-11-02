@@ -24,13 +24,12 @@ from pathlib import Path
 import pandas as pd
 import torch
 import torch.nn as nn
+from fi2010_dataset import LOBDataset, class_weights, load_fi2010, make_loader
+from models import build_model
 from sklearn.metrics import f1_score
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
-
-from fi2010_dataset import LOBDataset, class_weights, load_fi2010, make_loader
-from models import build_model
 
 if torch.cuda.is_available():
     DEVICE = torch.device("cuda")
@@ -133,15 +132,12 @@ def train(
         if verbose and (epoch % 5 == 0 or epoch == 1):
             print(
                 f"  epoch {epoch:3d} | train_loss {train_loss:.4f} "
-                f"| val_loss {val_loss:.4f} | val_f1 {val_f1:.4f}"
-                + (" ← best" if no_improve == 0 else "")
+                f"| val_loss {val_loss:.4f} | val_f1 {val_f1:.4f}" + (" ← best" if no_improve == 0 else "")
             )
 
         if no_improve >= patience:
             if verbose:
-                print(
-                    f"  Early stop at epoch {epoch} (best epoch {history['best_epoch']})."
-                )
+                print(f"  Early stop at epoch {epoch} (best epoch {history['best_epoch']}).")
             break
 
     # Restore best weights
@@ -257,9 +253,7 @@ def run_all_experiments(
                 print(f"  {tag}")
                 print(f"{'=' * 60}")
 
-                train_ds, val_ds, test_ds = load_fi2010(
-                    data_dir, fold=fold, horizon=horizon
-                )
+                train_ds, val_ds, test_ds = load_fi2010(data_dir, fold=fold, horizon=horizon)
 
                 model = build_model(model_name)
                 t0 = time.time()
@@ -288,11 +282,7 @@ def run_all_experiments(
                 }
                 rows.append(row)
                 pd.DataFrame(rows).to_csv(results_path, index=False)
-                print(
-                    f"  → test_f1={test_results['f1']:.4f}  "
-                    f"acc={test_results['acc']:.4f}  "
-                    f"time={elapsed:.0f}s"
-                )
+                print(f"  → test_f1={test_results['f1']:.4f}  acc={test_results['acc']:.4f}  time={elapsed:.0f}s")
 
     df = pd.DataFrame(rows)
     print(f"\nAll done. Results saved to {results_path}")
@@ -302,7 +292,5 @@ def run_all_experiments(
 
 def _print_summary(df: pd.DataFrame):
     print("\n--- Results Summary (weighted F1) ---")
-    pivot = df.pivot_table(
-        index="model", columns="horizon", values="test_f1", aggfunc="mean"
-    )
+    pivot = df.pivot_table(index="model", columns="horizon", values="test_f1", aggfunc="mean")
     print(pivot.round(4).to_string())
