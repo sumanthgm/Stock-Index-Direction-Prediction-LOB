@@ -38,11 +38,7 @@ LOCAL_ENV = os.path.join(os.path.dirname(__file__), ".env")
 # Colon-separated extra .env paths to keep in sync (e.g. another project that
 # uses the same Dhan/Kite tokens). Set in your local .env, e.g.:
 #   EXTRA_ENV_PATHS=/Users/joseph.raj/Documents/personal/tradetron/.env
-EXTRA_ENV_PATHS = [
-    os.path.expanduser(p.strip())
-    for p in os.environ.get("EXTRA_ENV_PATHS", "").split(":")
-    if p.strip()
-]
+EXTRA_ENV_PATHS = [os.path.expanduser(p.strip()) for p in os.environ.get("EXTRA_ENV_PATHS", "").split(":") if p.strip()]
 
 _any_token_updated = False
 
@@ -108,9 +104,7 @@ def refresh_dhan():
     print("  2. Click 'Generate Token'")
     print("  3. Paste it below.")
     print("=" * 70)
-    token = getpass.getpass(
-        "\nPaste Dhan access token (hidden, blank to skip): "
-    ).strip()
+    token = getpass.getpass("\nPaste Dhan access token (hidden, blank to skip): ").strip()
     if not token:
         print("[dhan]  Skipped.")
         return
@@ -121,9 +115,7 @@ def refresh_dhan():
 def refresh_kite():
     global _any_token_updated
     if not KITE_API_KEY or not KITE_API_SECRET:
-        print(
-            "[kite]  KITE_API_KEY or KITE_API_SECRET not set — skipping Kite refresh."
-        )
+        print("[kite]  KITE_API_KEY or KITE_API_SECRET not set — skipping Kite refresh.")
         return
     kite = KiteConnect(api_key=KITE_API_KEY)
     login_url = kite.login_url()
@@ -137,9 +129,7 @@ def refresh_kite():
     print("  3. Copy the request_token value.")
     print("=" * 70)
 
-    request_token = getpass.getpass(
-        "\nPaste request_token (hidden, blank to skip): "
-    ).strip()
+    request_token = getpass.getpass("\nPaste request_token (hidden, blank to skip): ").strip()
     if not request_token:
         print("[kite]  Skipped.")
         return

@@ -66,9 +66,6 @@ def _load_fold(data_dir: Path, fold: int) -> tuple[np.ndarray, np.ndarray]:
     Load train and test files for a given cross-fold.
     Returns (train_data, test_data), each shape (T, 149) — already transposed.
     """
-    # Detect normalisation variant from directory name
-    dir_name = data_dir.name  # e.g. "1.NoAuction_Zscore"
-
     # Build file paths — handle both capitalisation variants seen in the wild
     train_dir = data_dir / "NoAuction_Zscore_Training"
     test_dir = data_dir / "NoAuction_Zscore_Testing"
@@ -111,12 +108,8 @@ def _load_fold(data_dir: Path, fold: int) -> tuple[np.ndarray, np.ndarray]:
     print("  Parsing text files (one-time, ~60s) ...")
 
     # Load and TRANSPOSE: (149, T) → (T, 149)
-    train_data = pd.read_csv(train_path, sep=r"\s+", header=None).values.T.astype(
-        np.float32
-    )
-    test_data = pd.read_csv(test_path, sep=r"\s+", header=None).values.T.astype(
-        np.float32
-    )
+    train_data = pd.read_csv(train_path, sep=r"\s+", header=None).values.T.astype(np.float32)
+    test_data = pd.read_csv(test_path, sep=r"\s+", header=None).values.T.astype(np.float32)
 
     try:
         np.savez_compressed(cache_path, train=train_data, test=test_data)
@@ -139,9 +132,7 @@ def _file_shape(path: Path) -> str:
     return f"{nrows}×{ncols} on disk → {ncols}×{nrows} after transpose"
 
 
-def _make_windows(
-    features: np.ndarray, labels: np.ndarray, seq_len: int
-) -> tuple[np.ndarray, np.ndarray]:
+def _make_windows(features: np.ndarray, labels: np.ndarray, seq_len: int) -> tuple[np.ndarray, np.ndarray]:
     """
     Sliding-window segmentation.
     features: (T, 40)  labels: (T,)
@@ -150,9 +141,7 @@ def _make_windows(
     T = len(features)
     n_windows = T - seq_len + 1
     if n_windows <= 0:
-        raise ValueError(
-            f"Only {T} timesteps but seq_len={seq_len}. Use a smaller seq_len."
-        )
+        raise ValueError(f"Only {T} timesteps but seq_len={seq_len}. Use a smaller seq_len.")
     idx = np.arange(seq_len)[None, :] + np.arange(n_windows)[:, None]  # (N, seq_len)
     X = features[idx]  # (N, seq_len, 40)
     y = labels[idx[:, -1]]  # (N,)  label at last step
@@ -193,9 +182,7 @@ class WindowedLOBDataset(Dataset):
         seq_len: int,
         seg: np.ndarray | None = None,
     ):
-        self.features = torch.as_tensor(
-            np.ascontiguousarray(features), dtype=torch.float32
-        )  # (T, F)
+        self.features = torch.as_tensor(np.ascontiguousarray(features), dtype=torch.float32)  # (T, F)
         self.seq_len = seq_len
         labels = np.asarray(labels)
         T = len(self.features)
@@ -239,14 +226,10 @@ def load_fi2010(
         (train_dataset, val_dataset, test_dataset) as LOBDataset instances.
     """
     if horizon not in _HORIZON_TO_COL:
-        raise ValueError(
-            f"horizon must be one of {list(_HORIZON_TO_COL)}; got {horizon}."
-        )
+        raise ValueError(f"horizon must be one of {list(_HORIZON_TO_COL)}; got {horizon}.")
 
     data_dir = Path(data_dir)
-    print(
-        f"\nLoading FI-2010 | fold=CF_{fold} | horizon=k{horizon} | seq_len={seq_len}"
-    )
+    print(f"\nLoading FI-2010 | fold=CF_{fold} | horizon=k{horizon} | seq_len={seq_len}")
 
     train_data, test_data = _load_fold(data_dir, fold)
 
@@ -269,21 +252,15 @@ def load_fi2010(
     val_ds = WindowedLOBDataset(val_feat, val_labels, seq_len)
     test_ds = WindowedLOBDataset(test_feat, test_labels, seq_len)
 
-    print(
-        f"  Splits → train: {len(train_ds):,}  val: {len(val_ds):,}  test: {len(test_ds):,}"
-    )
+    print(f"  Splits → train: {len(train_ds):,}  val: {len(val_ds):,}  test: {len(test_ds):,}")
     _print_dist("  train labels", train_ds.y.numpy())
     _print_dist("  test  labels", test_ds.y.numpy())
 
     return train_ds, val_ds, test_ds
 
 
-def make_loader(
-    ds: LOBDataset, batch_size: int = 64, shuffle: bool = False
-) -> DataLoader:
-    return DataLoader(
-        ds, batch_size=batch_size, shuffle=shuffle, num_workers=0, pin_memory=False
-    )
+def make_loader(ds: LOBDataset, batch_size: int = 64, shuffle: bool = False) -> DataLoader:
+    return DataLoader(ds, batch_size=batch_size, shuffle=shuffle, num_workers=0, pin_memory=False)
 
 
 def class_weights(ds: LOBDataset) -> torch.Tensor:

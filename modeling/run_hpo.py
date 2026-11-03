@@ -118,9 +118,7 @@ def main():
     )
     objective = make_objective(args)
     study.optimize(objective, n_trials=args.n_trials)
-    print(
-        f"[hpo {args.study_name}] best val_f1={study.best_value:.4f} params={study.best_params}"
-    )
+    print(f"[hpo {args.study_name}] best val_f1={study.best_value:.4f} params={study.best_params}")
 
 
 if __name__ == "__main__":

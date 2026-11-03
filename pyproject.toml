@@ -1,0 +1,24 @@
+[project]
+name = "nse-lob-capstone"
+version = "0.1.0"
+description = "Short-term index direction prediction from NSE limit order book data (DeepLOB, MLPLOB, TLOB, MambaLOB)"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+# Only tests/ — data_acquisition/test_*_local.py are live-API harnesses, not unit tests.
+testpaths = ["tests"]
+pythonpath = ["modeling"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+extend-exclude = ["notebooks"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = ["E501", "E702", "E741", "B905", "B007", "B023"]
+
+[tool.ruff.lint.per-file-ignores]
+# Standalone scripts that adjust sys.path / load .env before importing.
+"data_acquisition/*.py" = ["E402"]
+"data_acquisition/debug_dhan_packet*.py" = ["E402", "F841"]

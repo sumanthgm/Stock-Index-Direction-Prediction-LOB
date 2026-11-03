@@ -16,16 +16,15 @@ import time
 import numpy as np
 import pandas as pd
 import torch
+from fi2010_dataset import make_loader
+from models import build_model
+from nse_dataset import load_nse
 from sklearn.metrics import (
     accuracy_score,
     confusion_matrix,
     f1_score,
     matthews_corrcoef,
 )
-
-from fi2010_dataset import make_loader
-from models import build_model
-from nse_dataset import load_nse
 from stats import set_seed
 from train import DEVICE, save_checkpoint, train
 
@@ -56,9 +55,7 @@ def full_metrics(y_true, y_pred):
     return {
         "accuracy": float(accuracy_score(y_true, y_pred)),
         "macro_f1": float(f1_score(y_true, y_pred, average="macro", zero_division=0)),
-        "weighted_f1": float(
-            f1_score(y_true, y_pred, average="weighted", zero_division=0)
-        ),
+        "weighted_f1": float(f1_score(y_true, y_pred, average="weighted", zero_division=0)),
         "mcc": float(matthews_corrcoef(y_true, y_pred)),
         "confusion": confusion_matrix(y_true, y_pred, labels=[0, 1, 2]).tolist(),
     }
@@ -77,11 +74,7 @@ def naive_baselines(y_train, y_test):
 
 
 def spec_tag(spec: dict) -> str:
-    sch = (
-        ""
-        if spec.get("label_scheme", "A").upper() == "A"
-        else f"_{spec['label_scheme'].upper()}"
-    )
+    sch = "" if spec.get("label_scheme", "A").upper() == "A" else f"_{spec['label_scheme'].upper()}"
     # strategy suffix only for the class-imbalance study (keeps default tags unchanged)
     strat = spec.get("strategy")
     strat_sfx = f"_{strat}" if strat and strat != "weighted_ce" else ""
@@ -99,29 +92,20 @@ def _strategy_train_kwargs(strategy: str | None, train_ds) -> dict:
         return {"weight_loss": False}
     if strategy == "label_smoothing":
         import torch.nn as nn
-
         from fi2010_dataset import class_weights
 
-        return {
-            "criterion": nn.CrossEntropyLoss(
-                weight=class_weights(train_ds), label_smoothing=0.1
-            )
-        }
+        return {"criterion": nn.CrossEntropyLoss(weight=class_weights(train_ds), label_smoothing=0.1)}
     if strategy == "focal":
         from fi2010_dataset import class_weights
-
         from losses import FocalLoss
 
         return {"criterion": FocalLoss(gamma=2.0, alpha=class_weights(train_ds))}
     if strategy == "balanced_sampling":
+        from fi2010_dataset import class_weights
         from torch.utils.data import WeightedRandomSampler
 
-        from fi2010_dataset import class_weights
-
         per_sample = class_weights(train_ds)[train_ds.y].double()
-        sampler = WeightedRandomSampler(
-            per_sample, num_samples=len(train_ds.y), replacement=True
-        )
+        sampler = WeightedRandomSampler(per_sample, num_samples=len(train_ds.y), replacement=True)
         return {"sampler": sampler, "weight_loss": False}
     raise ValueError(f"unknown strategy '{strategy}'")
 
@@ -184,9 +168,7 @@ def run_one(
     save_checkpoint(net, str(ckpt))
 
     conf = mt["confusion"]
-    recalls = [
-        round(conf[c][c] / max(sum(conf[c]), 1), 4) for c in range(3)
-    ]  # per-class recall: Down, Stat, Up
+    recalls = [round(conf[c][c] / max(sum(conf[c]), 1), 4) for c in range(3)]  # per-class recall: Down, Stat, Up
     row = {
         "model": model,
         "symbol": symbol,
@@ -226,7 +208,5 @@ def run_one(
         # mid-session kill (Kaggle timeout) still leaves finished runs on S3 to
         # skip on resume — not just after the final merge cell.
         s3_put_area(s3, out_csv, area)
-    print(
-        f"  -> wF1={mt['weighted_f1']:.4f} mF1={mt['macro_f1']:.4f} (F={n_features}, {elapsed:.0f}s)"
-    )
+    print(f"  -> wF1={mt['weighted_f1']:.4f} mF1={mt['macro_f1']:.4f} (F={n_features}, {elapsed:.0f}s)")
     return row

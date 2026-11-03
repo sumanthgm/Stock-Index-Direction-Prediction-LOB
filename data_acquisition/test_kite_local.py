@@ -219,11 +219,7 @@ def usability_report(path: str):
 
     print(f"\n  Instruments captured : {sorted(df['symbol'].unique())}")
     print(f"  Total ticks          : {len(df):,}")
-    duration_s = (
-        (df["timestamp"].max() - df["timestamp"].min()).total_seconds()
-        if len(df) > 1
-        else 0
-    )
+    duration_s = (df["timestamp"].max() - df["timestamp"].min()).total_seconds() if len(df) > 1 else 0
     print(f"  Collection window    : {duration_s:.0f}s ({duration_s / 60:.1f} min)")
 
     per_sym = df.groupby("symbol")
@@ -233,13 +229,9 @@ def usability_report(path: str):
         print(f"    {sym:15s}  {len(g):6,} ticks  (~{rate:.1f}/min)")
 
     # Completeness: how many rows have all 5 bid+ask levels filled?
-    price_cols = [
-        f"{s}_price_{i}" for s in ("bid", "ask") for i in range(1, LEVELS + 1)
-    ]
+    price_cols = [f"{s}_price_{i}" for s in ("bid", "ask") for i in range(1, LEVELS + 1)]
     complete = df[price_cols].notna().all(axis=1).mean() * 100
-    print(
-        f"\n  Depth completeness   : {complete:.1f}% rows have all {LEVELS} levels filled"
-    )
+    print(f"\n  Depth completeness   : {complete:.1f}% rows have all {LEVELS} levels filled")
 
     # Gap distribution (time between ticks per instrument)
     gaps = []
@@ -249,17 +241,13 @@ def usability_report(path: str):
     if gaps:
         gaps = np.array(gaps)
         print("\n  Inter-tick gap (all instruments):")
-        print(
-            f"    median {np.median(gaps):.2f}s  |  p95 {np.percentile(gaps, 95):.2f}s  |  max {gaps.max():.2f}s"
-        )
+        print(f"    median {np.median(gaps):.2f}s  |  p95 {np.percentile(gaps, 95):.2f}s  |  max {gaps.max():.2f}s")
 
     # Bid-ask spread
     if "bid_price_1" in df.columns and "ask_price_1" in df.columns:
         spread = (df["ask_price_1"] - df["bid_price_1"]) / df["bid_price_1"] * 100
         print("\n  Best bid-ask spread (bps, ÷100 = %):")
-        print(
-            f"    median {spread.median() * 100:.1f}  |  p95 {spread.quantile(0.95) * 100:.1f}"
-        )
+        print(f"    median {spread.median() * 100:.1f}  |  p95 {spread.quantile(0.95) * 100:.1f}")
 
     print("\n" + "-" * 70)
     print("  VERDICT vs FI-2010 requirements")
@@ -270,9 +258,7 @@ def usability_report(path: str):
     print(f"\n  FI-2010 input shape  : (B, 100, {n_features_fi2010})  [10-level LOB]")
     print(f"  Kite input shape     : (B, 100, {n_features_kite})   [5-level LOB]")
     print("\n  ✗ Direct swap        : NOT compatible — half the feature depth")
-    print(
-        "  ✓ Adapt models       : Change n_features=40 → 20 in all model constructors"
-    )
+    print("  ✓ Adapt models       : Change n_features=40 → 20 in all model constructors")
     print("  ✓ Train on FI-2010   : Use full 10-level FI-2010 for main results")
     print("  ✓ NSE pilot          : Train separate 5-level model on Kite data (n=20)")
     print("\n  Tick rate assessment:")
@@ -315,13 +301,9 @@ if __name__ == "__main__":
     secs_to_close = max(0, (market_close - now).total_seconds())
     collect_secs = min(COLLECT_MINUTES * 60, secs_to_close)
     if collect_secs < COLLECT_MINUTES * 60:
-        print(
-            f"\n[main] Market closes in {int(secs_to_close / 60)}m — collecting until 15:30 IST."
-        )
+        print(f"\n[main] Market closes in {int(secs_to_close / 60)}m — collecting until 15:30 IST.")
     else:
-        print(
-            f"\n[main] Collecting for {COLLECT_MINUTES} minutes. Ctrl+C to stop early."
-        )
+        print(f"\n[main] Collecting for {COLLECT_MINUTES} minutes. Ctrl+C to stop early.")
     kws.connect(threaded=True)
 
     deadline = time.time() + collect_secs

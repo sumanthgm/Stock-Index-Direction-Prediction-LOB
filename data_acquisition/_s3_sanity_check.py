@@ -3,10 +3,11 @@
 import warnings
 
 warnings.filterwarnings("ignore")
-import os
 import gc
-import pandas as pd
+import os
+
 import numpy as np
+import pandas as pd
 
 SOURCES = {
     "dhan": {"dir": "data/dhan", "levels": 20},
@@ -16,13 +17,7 @@ SOURCES = {
 for source, cfg in SOURCES.items():
     data_dir, max_levels = cfg["dir"], cfg["levels"]
     files = (
-        sorted(
-            [
-                os.path.join(data_dir, f)
-                for f in os.listdir(data_dir)
-                if f.endswith(".parquet")
-            ]
-        )
+        sorted([os.path.join(data_dir, f) for f in os.listdir(data_dir) if f.endswith(".parquet")])
         if os.path.isdir(data_dir)
         else []
     )
@@ -30,9 +25,7 @@ for source, cfg in SOURCES.items():
         print(f"\n[{source.upper()}] No files in {data_dir}/")
         continue
 
-    print(
-        f"\n{'=' * 60}\n  SOURCE: {source.upper()}  ({len(files)} file(s))\n{'=' * 60}"
-    )
+    print(f"\n{'=' * 60}\n  SOURCE: {source.upper()}  ({len(files)} file(s))\n{'=' * 60}")
     for f in files:
         print(f"  {os.path.basename(f)}  →  {os.path.getsize(f) // 1024} KB")
 
@@ -48,12 +41,8 @@ for source, cfg in SOURCES.items():
     if max_levels == 20:
         key_cols += ["bid_orders_1", "ask_orders_1"]
 
-    df = pd.concat(
-        [pd.read_parquet(f, columns=key_cols) for f in files], ignore_index=True
-    )
-    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True).dt.tz_convert(
-        "Asia/Kolkata"
-    )
+    df = pd.concat([pd.read_parquet(f, columns=key_cols) for f in files], ignore_index=True)
+    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True).dt.tz_convert("Asia/Kolkata")
     duration_s = (df["timestamp"].max() - df["timestamp"].min()).total_seconds()
 
     print("\n--- OVERVIEW ---")
@@ -70,9 +59,7 @@ for source, cfg in SOURCES.items():
         rate = len(g) / duration_s * 60
         gaps = g["timestamp"].diff().dt.total_seconds().dropna()
         cv = gaps.std() / gaps.mean()
-        print(
-            f"  {sym:22s}  {len(g):6,} ticks  {rate:5.1f}/min  gap_med={gaps.median():.3f}s  CV={cv:.2f}"
-        )
+        print(f"  {sym:22s}  {len(g):6,} ticks  {rate:5.1f}/min  gap_med={gaps.median():.3f}s  CV={cv:.2f}")
 
     print("\n--- PRICE SANITY ---")
     df["spread"] = df["ask_price_1"] - df["bid_price_1"]
@@ -106,21 +93,14 @@ for source, cfg in SOURCES.items():
     for i in [1, 5, 10, 15, 20][:max_levels]:
         b, a = f"bid_price_{i}", f"ask_price_{i}"
         if b in df_full.columns:
-            print(
-                f"    L{i:2d}: bid={df_full[b].isna().mean() * 100:.1f}%  ask={df_full[a].isna().mean() * 100:.1f}%"
-            )
+            print(f"    L{i:2d}: bid={df_full[b].isna().mean() * 100:.1f}%  ask={df_full[a].isna().mean() * 100:.1f}%")
     del df_full
     gc.collect()
 
     # Labels — sample 5000 rows per symbol to save memory
     print("\n--- LABEL DISTRIBUTION (alpha=1e-5, k=5, sample=5000/sym) ---")
     df_lbl = pd.concat(
-        [
-            pd.read_parquet(
-                f, columns=["timestamp", "symbol", "bid_price_1", "ask_price_1"]
-            )
-            for f in files
-        ],
+        [pd.read_parquet(f, columns=["timestamp", "symbol", "bid_price_1", "ask_price_1"]) for f in files],
         ignore_index=True,
     )
     df_lbl["timestamp"] = pd.to_datetime(df_lbl["timestamp"], utc=True)
@@ -130,29 +110,12 @@ for source, cfg in SOURCES.items():
         if len(g) > 5000:
             g = g.sample(5000, random_state=42).sort_index().reset_index(drop=True)
         mid = (g["bid_price_1"] + g["ask_price_1"]) / 2
-        m_ahead = pd.Series(
-            [
-                mid[i : i + K].mean() if i + K <= len(mid) else np.nan
-                for i in range(len(mid))
-            ]
-        )
-        m_behind = pd.Series(
-            [mid[max(0, i - K + 1) : i + 1].mean() for i in range(len(mid))]
-        )
+        m_ahead = pd.Series([mid[i : i + K].mean() if i + K <= len(mid) else np.nan for i in range(len(mid))])
+        m_behind = pd.Series([mid[max(0, i - K + 1) : i + 1].mean() for i in range(len(mid))])
         ret = (m_ahead - m_behind) / m_behind
-        lbl = ret.apply(
-            lambda r: (
-                "Up"
-                if r > ALPHA
-                else ("Down" if r < -ALPHA else "Stat")
-                if pd.notna(r)
-                else None
-            )
-        )
+        lbl = ret.apply(lambda r: "Up" if r > ALPHA else ("Down" if r < -ALPHA else "Stat") if pd.notna(r) else None)
         vc = lbl.value_counts(normalize=True) * 100
-        print(
-            f"  {sym:22s}  Up={vc.get('Up', 0):.1f}%  Stat={vc.get('Stat', 0):.1f}%  Down={vc.get('Down', 0):.1f}%"
-        )
+        print(f"  {sym:22s}  Up={vc.get('Up', 0):.1f}%  Stat={vc.get('Stat', 0):.1f}%  Down={vc.get('Down', 0):.1f}%")
     del df_lbl
     gc.collect()
 

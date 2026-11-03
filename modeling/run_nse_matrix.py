@@ -25,10 +25,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import torch
-from sklearn.metrics import f1_score
-
 from models import build_model
 from nse_dataset import load_nse
+from sklearn.metrics import f1_score
 from train import DEVICE, make_loader, save_checkpoint, train
 
 # Root symbols → stitched front-month series (May-FUT + Jun-FUT). The Colab
@@ -54,15 +53,9 @@ def baselines(y: np.ndarray) -> dict:
     rng = np.random.RandomState(0)
     pred_rand = rng.randint(0, 3, len(y))
     return {
-        "baseline_majority_wf1": round(
-            f1_score(y, pred_maj, average="weighted", zero_division=0), 4
-        ),
-        "baseline_stat_wf1": round(
-            f1_score(y, pred_stat, average="weighted", zero_division=0), 4
-        ),
-        "baseline_random_wf1": round(
-            f1_score(y, pred_rand, average="weighted", zero_division=0), 4
-        ),
+        "baseline_majority_wf1": round(f1_score(y, pred_maj, average="weighted", zero_division=0), 4),
+        "baseline_stat_wf1": round(f1_score(y, pred_stat, average="weighted", zero_division=0), 4),
+        "baseline_random_wf1": round(f1_score(y, pred_rand, average="weighted", zero_division=0), 4),
     }
 
 
@@ -79,9 +72,7 @@ def eval_full(model, test_ds) -> dict:
     preds = np.concatenate(preds)
     labels = np.concatenate(labels)
     return {
-        "test_wf1": round(
-            f1_score(labels, preds, average="weighted", zero_division=0), 4
-        ),
+        "test_wf1": round(f1_score(labels, preds, average="weighted", zero_division=0), 4),
         "test_mf1": round(f1_score(labels, preds, average="macro", zero_division=0), 4),
         "test_acc": round(float((preds == labels).mean()), 4),
     }

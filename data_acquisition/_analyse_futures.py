@@ -1,6 +1,7 @@
-import pandas as pd
-import numpy as np
 import warnings
+
+import numpy as np
+import pandas as pd
 
 warnings.filterwarnings("ignore")
 import sys
@@ -31,9 +32,7 @@ print("\n=== BID-ASK SPREAD ===")
 df["spr_bps"] = (df["ask_price_1"] - df["bid_price_1"]) / df["bid_price_1"] * 10000
 for sym, g in df.groupby("symbol"):
     s = g["spr_bps"].dropna()
-    print(
-        f"  {sym:22s}  median={s.median():.2f} bps  mean={s.mean():.2f}  p95={s.quantile(0.95):.2f}"
-    )
+    print(f"  {sym:22s}  median={s.median():.2f} bps  mean={s.mean():.2f}  p95={s.quantile(0.95):.2f}")
 
 print("\n=== DEPTH PROFILE — avg qty per level ===")
 for sym, g in df.groupby("symbol"):
@@ -69,25 +68,10 @@ for ALPHA, label in [
         g = g.sort_values("timestamp").reset_index(drop=True)
         mid = (g["bid_price_1"] + g["ask_price_1"]) / 2
         K = 5
-        m_ahead = pd.Series(
-            [
-                mid[i : i + K].mean() if i + K <= len(mid) else np.nan
-                for i in range(len(mid))
-            ]
-        )
-        m_behind = pd.Series(
-            [mid[max(0, i - K + 1) : i + 1].mean() for i in range(len(mid))]
-        )
+        m_ahead = pd.Series([mid[i : i + K].mean() if i + K <= len(mid) else np.nan for i in range(len(mid))])
+        m_behind = pd.Series([mid[max(0, i - K + 1) : i + 1].mean() for i in range(len(mid))])
         ret = (m_ahead - m_behind) / m_behind
-        lbl = ret.apply(
-            lambda r: (
-                "Up"
-                if r > ALPHA
-                else ("Down" if r < -ALPHA else "Stat")
-                if pd.notna(r)
-                else None
-            )
-        )
+        lbl = ret.apply(lambda r: "Up" if r > ALPHA else ("Down" if r < -ALPHA else "Stat") if pd.notna(r) else None)
         vc = lbl.value_counts(normalize=True) * 100
         n = lbl.notna().sum()
         print(
@@ -103,8 +87,6 @@ for sym, g in df.groupby("symbol"):
     rate = n / duration_s * 60
     d1, d5, d10 = int(rate * 375), int(rate * 375 * 5), int(rate * 375 * 10)
     ratio = d10 / 400000
-    print(
-        f"  {sym:22s}  {n:8,}  {max(0, n - 99):8,}  {d1:10,}  {d5:10,}  {d10:10,}  {ratio:10.2f}x"
-    )
+    print(f"  {sym:22s}  {n:8,}  {max(0, n - 99):8,}  {d1:10,}  {d5:10,}  {d10:10,}  {ratio:10.2f}x")
 print("\n  FI-2010 (5 stocks, 10 days): ~400,000 events/stock")
 sys.stdout.flush()

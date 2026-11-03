@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Secrets — use data_acquisition/.env.example as the template
+.env
+*.token
+access_token*.txt
+
+# Data and logs (raw LOB data lives in S3)
+data_acquisition/data/
+data_acquisition/logs/
+*.parquet
+*.csv.gz
+logs/
+
+# Model artefacts
+modeling/checkpoints/
+*.pt
+*.pth
+*.ckpt
+
+# Third-party papers are referenced, not redistributed (see literature/papers/README.md)
+literature/papers/*.pdf
+
+.DS_Store

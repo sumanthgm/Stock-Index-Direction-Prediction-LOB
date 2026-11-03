@@ -31,10 +31,6 @@ class FocalLoss(nn.Module):
     def forward(self, logits: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         log_p = F.log_softmax(logits, dim=1)
         ce = F.nll_loss(log_p, target, weight=self.alpha, reduction="none")
-        p_t = (
-            torch.exp(-ce)
-            if self.alpha is None
-            else log_p.gather(1, target.unsqueeze(1)).squeeze(1).exp()
-        )
+        p_t = torch.exp(-ce) if self.alpha is None else log_p.gather(1, target.unsqueeze(1)).squeeze(1).exp()
         loss = (1.0 - p_t) ** self.gamma * ce
         return loss.mean()

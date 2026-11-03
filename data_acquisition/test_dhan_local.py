@@ -113,17 +113,13 @@ LEVELS = 20
 IST = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "data", "dhan")
 
-WS_URL = (
-    f"wss://depth-api-feed.dhan.co/twentydepth"
-    f"?token={ACCESS_TOKEN}&clientId={CLIENT_ID}&authType=2"
-)
+WS_URL = f"wss://depth-api-feed.dhan.co/twentydepth?token={ACCESS_TOKEN}&clientId={CLIENT_ID}&authType=2"
 
 SUBSCRIBE_MSG = {
     "RequestCode": 23,
     "InstrumentCount": len(INSTRUMENTS),
     "InstrumentList": [
-        {"ExchangeSegment": INSTRUMENT_SEGMENTS.get(sid, "NSE_EQ"), "SecurityId": sid}
-        for sid in INSTRUMENTS
+        {"ExchangeSegment": INSTRUMENT_SEGMENTS.get(sid, "NSE_EQ"), "SecurityId": sid} for sid in INSTRUMENTS
     ],
 }
 
@@ -274,9 +270,7 @@ def _build_row(security_id: str, bids: list, asks: list) -> dict:
     }
     for prefix, levels in (("bid", bids), ("ask", asks)):
         for i, (price, qty, orders) in enumerate(levels, start=1):
-            row[f"{prefix}_price_{i}"] = (
-                price if PRICE_MIN <= price <= PRICE_MAX else None
-            )
+            row[f"{prefix}_price_{i}"] = price if PRICE_MIN <= price <= PRICE_MAX else None
             row[f"{prefix}_qty_{i}"] = qty if qty > 0 else None
             row[f"{prefix}_orders_{i}"] = orders if orders > 0 else None
     return row
@@ -315,11 +309,7 @@ async def collect(deadline: float):
             # Log first 5 raw packets for parser validation
             if len(raw_packet_log) < 5:
                 raw_packet_log.append((len(message), message[:32].hex()))
-                print(
-                    f"  [raw packet #{len(raw_packet_log)}]"
-                    f"  size={len(message)}B  "
-                    f"  first32={message[:32].hex()}"
-                )
+                print(f"  [raw packet #{len(raw_packet_log)}]  size={len(message)}B    first32={message[:32].hex()}")
 
             remainder = len(message) % PACKET_SIZE
             if remainder != 0:
@@ -332,9 +322,7 @@ async def collect(deadline: float):
                     os.makedirs(OUTPUT_DIR, exist_ok=True)
                     with open(odd_path, "wb") as _f:
                         _f.write(message)
-                    print(
-                        f"  [debug] Saved first odd-size packet ({len(message)}B) → {odd_path}"
-                    )
+                    print(f"  [debug] Saved first odd-size packet ({len(message)}B) → {odd_path}")
                     _odd_packet_saved = True
 
             for security_id, bids, asks in _parse_packet(message):
@@ -356,12 +344,7 @@ async def collect(deadline: float):
                 rows.append(_build_row(security_id, bids, asks))
 
             if parse_stats["total"] % 200 == 0:
-                elapsed = int(
-                    (
-                        asyncio.get_event_loop().time()
-                        - (deadline - COLLECT_MINUTES * 60)
-                    )
-                )
+                elapsed = int(asyncio.get_event_loop().time() - (deadline - COLLECT_MINUTES * 60))
                 print(
                     f"\r  [{elapsed:>4}s | "
                     f"{parse_stats['parsed']:>5} parsed | "
@@ -408,22 +391,13 @@ def print_parser_diagnostics():
     if raw_packet_log:
         sizes = [s for s, _ in raw_packet_log]
         unique_sizes = set(sizes)
-        bad_sizes = {
-            s
-            for s in unique_sizes
-            if s % PACKET_SIZE != 0 and s % PACKET_SIZE_COMPACT != 0
-        }
+        bad_sizes = {s for s in unique_sizes if s % PACKET_SIZE != 0 and s % PACKET_SIZE_COMPACT != 0}
         if bad_sizes:
             print(f"\n  *** Truly unrecognised sizes: {bad_sizes}")
         else:
-            print(
-                f"\n  Packet sizes seen: {unique_sizes} — all parseable (full + compact)"
-            )
+            print(f"\n  Packet sizes seen: {unique_sizes} — all parseable (full + compact)")
 
-    if (
-        parse_stats["bad_prices"] > parse_stats["parsed"] * 0.5
-        and parse_stats["parsed"] < 10
-    ):
+    if parse_stats["bad_prices"] > parse_stats["parsed"] * 0.5 and parse_stats["parsed"] < 10:
         print(
             "\n  *** Most prices are implausible. Parser offset mismatch — "
             "re-run debug_dhan_packet.py to confirm structure."
@@ -454,11 +428,7 @@ def usability_report(path: str):
 
     print(f"\n  Instruments captured : {sorted(df['symbol'].unique())}")
     print(f"  Total ticks          : {len(df):,}")
-    duration_s = (
-        (df["timestamp"].max() - df["timestamp"].min()).total_seconds()
-        if len(df) > 1
-        else 0
-    )
+    duration_s = (df["timestamp"].max() - df["timestamp"].min()).total_seconds() if len(df) > 1 else 0
     print(f"  Collection window    : {duration_s:.0f}s ({duration_s / 60:.1f} min)")
 
     per_sym = df.groupby("symbol")
@@ -466,9 +436,7 @@ def usability_report(path: str):
     for sym, g in per_sym:
         rate = len(g) / duration_s * 60 if duration_s > 0 else 0
         n_windows = max(0, len(g) - 100 + 1)
-        print(
-            f"    {sym:15s}  {len(g):6,} ticks  (~{rate:.1f}/min)  windows={n_windows:,}"
-        )
+        print(f"    {sym:15s}  {len(g):6,} ticks  (~{rate:.1f}/min)  windows={n_windows:,}")
 
     # Completeness
     price_cols_10 = [f"{s}_price_{i}" for s in ("bid", "ask") for i in range(1, 11)]
@@ -487,29 +455,19 @@ def usability_report(path: str):
     if gaps:
         gaps = np.array(gaps)
         print("\n  Inter-tick gap:")
-        print(
-            f"    median {np.median(gaps):.2f}s  |  p95 {np.percentile(gaps, 95):.2f}s  |  max {gaps.max():.2f}s"
-        )
+        print(f"    median {np.median(gaps):.2f}s  |  p95 {np.percentile(gaps, 95):.2f}s  |  max {gaps.max():.2f}s")
 
     # Spread
     if "bid_price_1" in df.columns and "ask_price_1" in df.columns:
         spread_bps = (df["ask_price_1"] - df["bid_price_1"]) / df["bid_price_1"] * 10000
         print("\n  Best bid-ask spread (bps):")
-        print(
-            f"    median {spread_bps.median():.1f}  |  p95 {spread_bps.quantile(0.95):.1f}"
-        )
+        print(f"    median {spread_bps.median():.1f}  |  p95 {spread_bps.quantile(0.95):.1f}")
 
     # Depth profile
     print("\n  Depth volume profile (avg qty, bid side L1-L5-L10-L20):")
     for sym, g in per_sym:
-        sample = [
-            int(g[f"bid_qty_{i}"].mean())
-            for i in [1, 5, 10, 20]
-            if f"bid_qty_{i}" in g.columns
-        ]
-        print(
-            f"    {sym:15s}: L1={sample[0]:,}  L5={sample[1]:,}  L10={sample[2]:,}  L20={sample[3]:,}"
-        )
+        sample = [int(g[f"bid_qty_{i}"].mean()) for i in [1, 5, 10, 20] if f"bid_qty_{i}" in g.columns]
+        print(f"    {sym:15s}: L1={sample[0]:,}  L5={sample[1]:,}  L10={sample[2]:,}  L20={sample[3]:,}")
 
     # Label simulation (FI-2010 smoothed formula)
     # alpha=0.00002 (0.002%) instead of FI-2010's 0.002 (0.2%) — short test windows
@@ -522,11 +480,7 @@ def usability_report(path: str):
         smooth_past = mid.rolling(k).mean()
         smooth_future = mid.shift(-k).rolling(k).mean()
         ret = (smooth_future - smooth_past) / smooth_past
-        direction = ret.map(
-            lambda r: (
-                2 if r > alpha else (0 if r < -alpha else 1) if r == r else float("nan")
-            )
-        ).dropna()
+        direction = ret.map(lambda r: 2 if r > alpha else (0 if r < -alpha else 1) if r == r else float("nan")).dropna()
         counts = direction.value_counts().sort_index()
         total = counts.sum()
         print(
@@ -544,12 +498,8 @@ def usability_report(path: str):
     print(f"  {'LOB levels':20s}  {'5':>10}  {'20':>10}  {'10':>10}")
     print(f"  {'Features (n)':20s}  {'20':>10}  {'80':>10}  {'40':>10}")
     dhan_rate = len(df) / duration_s * 60 if duration_s > 0 else 0
-    print(
-        f"  {'Ticks/min (combined)':20s}  {'~210':>10}  {int(dhan_rate):>10}  {'~653':>10}"
-    )
-    print(
-        f"  {'Depth complete':20s}  {'100%':>10}  {int(complete_10):>9}%  {'100%':>10}"
-    )
+    print(f"  {'Ticks/min (combined)':20s}  {'~210':>10}  {int(dhan_rate):>10}  {'~653':>10}")
+    print(f"  {'Depth complete':20s}  {'100%':>10}  {int(complete_10):>9}%  {'100%':>10}")
     print(f"  {'Historical data':20s}  {'No':>10}  {'No':>10}  {'Yes':>10}")
     print(f"  {'Event-driven':20s}  {'~500ms':>10}  {'?':>10}  {'Yes':>10}")
 
@@ -557,23 +507,15 @@ def usability_report(path: str):
     if gaps.size > 0:
         gap_cv = np.std(gaps) / np.mean(gaps)  # coefficient of variation
         if gap_cv < 0.5:
-            verdict = (
-                "PERIODIC (low CV={:.2f}) — similar to Kite ~500ms batching".format(
-                    gap_cv
-                )
-            )
+            verdict = f"PERIODIC (low CV={gap_cv:.2f}) — similar to Kite ~500ms batching"
         else:
-            verdict = "EVENT-DRIVEN (high CV={:.2f}) — gap variance suggests true LOB events".format(
-                gap_cv
-            )
+            verdict = f"EVENT-DRIVEN (high CV={gap_cv:.2f}) — gap variance suggests true LOB events"
         print(f"    Gap CV = {gap_cv:.2f} → {verdict}")
 
     print("\n  VERDICT FOR PROJECT:")
     if complete_10 > 95 and dhan_rate > 50:
         print("  ✓ Dhan 20-level data is HIGH quality and suitable for NSE pilot.")
-        print(
-            "  ✓ Extract first 10 levels → 40-feature input, IDENTICAL to FI-2010 format."
-        )
+        print("  ✓ Extract first 10 levels → 40-feature input, IDENTICAL to FI-2010 format.")
         print("  ✓ This is significantly better than Kite for this project.")
         print("  → Collect 5-10 days on EC2, use as NSE test/validation set.")
     else:
@@ -593,9 +535,7 @@ async def main():
     secs_to_close = max(0, (market_close - now).total_seconds())
     collect_secs = min(COLLECT_MINUTES * 60, secs_to_close)
     if collect_secs < COLLECT_MINUTES * 60:
-        print(
-            f"[dhan] Market closes in {int(secs_to_close / 60)}m — collecting until 15:30 IST."
-        )
+        print(f"[dhan] Market closes in {int(secs_to_close / 60)}m — collecting until 15:30 IST.")
 
     loop = asyncio.get_event_loop()
     deadline = loop.time() + collect_secs
